@@ -30,6 +30,13 @@ class TrendBlogSystem:
         else:
             self.client_ready = False
             print("경고: GEMINI_API_KEY 또는 GOOGLE_API_KEY 환경변수가 설정되지 않았습니다.")
+            
+        # 초기화: 디렉토리 및 파일 생성
+        if not os.path.exists(self.blog_posts_dir):
+            os.makedirs(self.blog_posts_dir)
+            
+        if not os.path.exists(self.used_keywords_file):
+            self._save_used_keywords([])
 
     def _log(self, message):
         """로그 메시지 기록"""
@@ -297,108 +304,6 @@ class TrendBlogSystem:
     def select_keyword(self, keywords):
         """
         사용되지 않은 첫 번째 키워드 선택
-        """
-        used_keywords = self._load_used_keywords()
-        
-        for keyword in keywords:
-            if keyword not in used_keywords:
-                self._log(f"선택된 키워드: {keyword}")
-                return keyword
-        
-        self._log("사용 가능한 새로운 키워드가 없습니다.")
-        return None
-
-    def generate_blog_content(self, keyword):
-        """
-        선택된 키워드로 블로그 콘텐츠 생성
-        
-        Args:
-            keyword: 블로그 주제 키워드
-        
-        Returns:
-            str: 생성된 블로그 콘텐츠
-        """
-        if not self.client_ready:
-            return f"# {keyword}에 대한 블로그 포스트\n\n(API 키가 설정되지 않아 실제 콘텐츠를 생성할 수 없습니다)"
-        
-        try:
-            self._log(f"'{keyword}' 키워드로 블로그 콘텐츠 생성 중...")
-            
-            prompt = f"""
-'{keyword}'에 대한 블로그 게시글을 작성해주세요.
-
-요구사항:
-- 독자들이 관심을 가질 수 있는 흥미로운 내용
-- 정보성과 가독성을 모두 갖춘 글
-- 적절한 제목과 소제목 포함
-- 약 1000-1500자 분량
-- 마크다운 형식으로 작성
-
-블로그 게시글을 작성해주세요.
-"""
-            # 재시도 로직 추가 (429 에러 대응)
-            max_retries = 3
-            retry_delay = 10
-            
-            for attempt in range(max_retries):
-                try:
-                    response = self.model.generate_content(prompt)
-                    content = response.text
-                    self._log("블로그 콘텐츠 생성 완료")
-                    return content
-                except Exception as api_error:
-                    if "429" in str(api_error) and attempt < max_retries - 1:
-                        self._log(f"API 쿼터 초과 (429). {retry_delay}초 후 재시도... ({attempt+1}/{max_retries})")
-                        time.sleep(retry_delay)
-                        retry_delay *= 2  # 지수 백오프
-                    else:
-                        raise api_error
-            
-            return None
-        
-        except Exception as e:
-            self._log(f"콘텐츠 생성 오류: {e}")
-            return None
-        
-        # 필요한 디렉토리 생성
-        if not os.path.exists(self.blog_posts_dir):
-            os.makedirs(self.blog_posts_dir)
-        
-        # 사용된 키워드 파일 초기화
-        if not os.path.exists(self.used_keywords_file):
-            self._save_used_keywords([])
-    
-    def _log(self, message):
-        """로그 메시지 기록"""
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        log_message = f"[{timestamp}] {message}"
-        print(log_message)
-        
-        with open(self.log_file, 'a', encoding='utf-8') as f:
-            f.write(log_message + '\n')
-    
-    def _load_used_keywords(self):
-        """이미 사용된 키워드 목록 불러오기"""
-        try:
-            with open(self.used_keywords_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            self._log(f"키워드 파일 로드 오류: {e}")
-            return []
-    
-    def _save_used_keywords(self, keywords):
-        """사용된 키워드 목록 저장"""
-        try:
-            with open(self.used_keywords_file, 'w', encoding='utf-8') as f:
-                json.dump(keywords, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            self._log(f"키워드 파일 저장 오류: {e}")
-    
-
-    
-    def select_keyword(self, keywords):
-        """
-        사용되지 않은 첫 번째 키워드 선택
         
         Args:
             keywords: 키워드 리스트
@@ -440,27 +345,58 @@ class TrendBlogSystem:
             
             # 3. AI로 본문 생성
             prompt = f"""
-'{keyword}'에 대한 블로그 게시글을 작성해주세요.
+'{keyword}'에 대해 정보 탐색을 하는 사용자는
+뉴스나 트렌드 요약이 아니라,
+판단 기준과 구조를 이해하기 위한 개요 정보를 원한다.
 
-요구사항:
-- 독자들이 관심을 가질 수 있는 흥미로운 내용
-- 정보성과 가독성을 모두 갖춘 글
-- 적절한 제목과 소제목 포함
-- 약 1000-1500자 분량
-- **HTML 형식으로 작성** (h1, h2, p, strong, em 태그 사용)
-- SEO를 위한 자연스러운 키워드 배치
+이 글은 반드시 'front-matter + 본문'을 함께 생성해야 하며,
+front-matter의 성격은 본문 내용과 정확히 일치해야 한다.
 
-HTML 형식으로 블로그 본문만 작성해주세요. (DOCTYPE이나 head, body 태그는 제외)
+[Front-matter 작성 규칙]
+- title: '{keyword}' + 판단/구조/기준/분석 중 하나를 포함한 정보형 제목
+- categories: 반드시 [정보, 분석] 중에서만 선택 (트렌드 사용 금지)
+- tags: ['{keyword}', 판단기준, 구조분석] 형태로 구성
+- description: '{keyword}'에 대해 판단 기준과 한계를 정리한 정보성 분석 글
+- '최신', '트렌드', '뉴스' 단어 사용 금지
+
+[글의 목적]
+- '{keyword}'를 처음 접하는 사람이
+  이 개념이나 대상을 어떻게 바라봐야 할지
+  판단 기준을 제공하는 정보성 콘텐츠 작성
+
+[작성 원칙]
+- 홍보, 마케팅, 뉴스 요약처럼 보이지 않게 작성
+- 개인 경험, 시점 특정(최근, 요즘 등) 표현 사용 금지
+- 일반적인 판단 기준 → 특징 → 한계 구조 유지
+
+[필수 구성]
+1. 서론: 사람들이 '{keyword}'를 검색하는 이유 요약
+2. 본문 1: 이 주제를 판단할 때 자주 사용되는 기준 2~3가지
+3. 본문 2: 해당 기준에서 본 '{keyword}'의 특징
+4. 본문 3: 상황이나 조건에 따라 달라질 수 있는 한계나 주의점
+5. 결론: 어떤 경우에 참고하면 적합한 정보인지 명확히 정리
+
+[결론 필수 문장]
+- "이 정보는 '{keyword}'를 처음 접하거나,
+   개요 수준에서 판단 기준이 필요한 경우에 참고하기 적합하다."
+
+[형식]
+- Markdown
+- front-matter는 YAML 형식으로 본문 최상단에 작성
+- 전체 분량 900~1200자
+
+위 기준을 어기지 말고 front-matter와 본문을 함께 작성하라.
 """
+
             
             response = self.model.generate_content(prompt)
             main_content = response.text
             
-            # 4. SEO 최적화된 HTML 문서 생성
-            html_content = self._build_seo_html(keyword, main_content, news_items, featured_image)
+            # 4. Markdown 콘텐츠 생성 (Frontmatter 포함)
+            markdown_content = self._build_markdown_content(keyword, main_content, news_items, featured_image)
             
             self._log("블로그 콘텐츠 생성 완료")
-            return html_content
+            return markdown_content
         
         except Exception as e:
             self._log(f"콘텐츠 생성 오류: {e}")
@@ -508,237 +444,63 @@ HTML 형식으로 블로그 본문만 작성해주세요. (DOCTYPE이나 head, b
         
         return image_url  # 실패 시 원본 URL 반환
     
-    def _build_seo_html(self, keyword, main_content, news_items, featured_image):
+    def _build_markdown_content(self, keyword, main_content, news_items, featured_image):
         """
-        SEO 최적화된 HTML 문서 생성 (워드프레스 호환)
+        Markdown 콘텐츠 생성 (Frontmatter 포함)
         """
         # 대표 이미지 다운로드
         local_featured_image = None
         if featured_image:
             local_featured_image = self.download_image(featured_image, keyword, 'featured')
         
-        # 뉴스 카드 HTML 생성 (맨 아래 배치)
-        news_cards_html = ""
+        # 날짜 생성
+        today = datetime.now().strftime('%Y-%m-%d')
+        
+        # AI가 생성한 본문에서 Frontmatter 처리 및 대표 이미지 삽입
+        markdown = ""
+        
+        # Frontmatter 분리 (---로 시작하고 ---로 끝나는 부분 찾기)
+        if main_content.strip().startswith('---'):
+            parts = main_content.split('---', 2)
+            if len(parts) >= 3:
+                # parts[0]은 빈 문자열, parts[1]은 Frontmatter 내용, parts[2]는 본문
+                frontmatter = f"---{parts[1]}---\n\n"
+                body = parts[2].strip()
+                
+                markdown += frontmatter
+                
+                # 대표 이미지 추가 (Frontmatter 직후)
+                if local_featured_image:
+                    markdown += f"![{keyword}]({local_featured_image})\n\n"
+                
+                markdown += f"{body}\n\n"
+            else:
+                # Frontmatter 형식이 이상하면 그냥 합치기
+                if local_featured_image:
+                    markdown += f"![{keyword}]({local_featured_image})\n\n"
+                markdown += f"{main_content}\n\n"
+        else:
+            # Frontmatter가 없는 경우 (만약을 대비해)
+            if local_featured_image:
+                markdown += f"![{keyword}]({local_featured_image})\n\n"
+            markdown += f"{main_content}\n\n"
+        
+        # 뉴스 섹션 추가
         if news_items:
-            news_cards_html = '<div class="news-section">\n<h2 class="news-header">📰 관련 뉴스</h2>\n<div class="news-cards">\n'
+            markdown += "## 📰 관련 뉴스\n\n"
             for idx, news in enumerate(news_items):
                 # 뉴스 이미지 다운로드
                 news_image = news.get('image', '')
                 if news_image and news_image.startswith('http'):
                     news_image = self.download_image(news_image, keyword, f'news_{idx}')
                 
-                news_cards_html += f'''
-<div class="news-card">
-    {f'<img src="{news_image}" alt="{news["title"]}" class="news-image">' if news_image else ''}
-    <div class="news-content">
-        <h3><a href="{news["url"]}" target="_blank" rel="noopener noreferrer">{news["title"]}</a></h3>
-        <p class="news-source">출처: {news.get("source", "Unknown Source")}</p>
-        <p class="news-summary">{news["summary"][:150]}...</p>
-    </div>
-</div>
-'''
-            news_cards_html += '</div>\n</div>\n'
-        
-        # 대표 이미지 HTML
-        featured_image_html = ""
-        if local_featured_image:
-            featured_image_html = f'<img src="{local_featured_image}" alt="{keyword}" class="featured-image">\n'
-        
-        # 전체 HTML 문서 (순서: 제목 -> 대표이미지 -> 본문 -> 뉴스)
-        html = f'''<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="{keyword}에 대한 최신 정보와 뉴스를 확인하세요. 트렌드 분석과 상세 정보를 제공합니다.">
-    <meta name="keywords" content="{keyword}, 트렌드, 뉴스, 정보">
-    <meta name="author" content="Trend Blog System">
-    
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="article">
-    <meta property="og:title" content="{keyword} - 최신 트렌드 분석">
-    <meta property="og:description" content="{keyword}에 대한 최신 정보와 뉴스">
-    {f'<meta property="og:image" content="{local_featured_image}">' if local_featured_image else ''}
-    
-    <!-- Twitter -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="{keyword} - 최신 트렌드 분석">
-    <meta name="twitter:description" content="{keyword}에 대한 최신 정보와 뉴스">
-    {f'<meta name="twitter:image" content="{local_featured_image}">' if local_featured_image else ''}
-    
-    <title>{keyword} - 최신 트렌드 분석</title>
-    
-    <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }}
-        
-        .container {{
-            background-color: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }}
-        
-        .featured-image {{
-            width: 100%;
-            max-height: 400px;
-            object-fit: cover;
-            border-radius: 8px;
-            margin-bottom: 30px;
-        }}
-        
-        h1 {{
-            color: #1a1a1a;
-            font-size: 2.5em;
-            margin-bottom: 20px;
-            line-height: 1.2;
-        }}
-        
-        h2 {{
-            color: #2c3e50;
-            font-size: 1.8em;
-            margin-top: 30px;
-            margin-bottom: 15px;
-            border-bottom: 2px solid #3498db;
-            padding-bottom: 10px;
-        }}
-        
-        h3 {{
-            color: #34495e;
-            font-size: 1.3em;
-            margin-top: 20px;
-        }}
-        
-        p {{
-            margin-bottom: 15px;
-            font-size: 1.1em;
-        }}
-        
-        .news-section {{
-            margin: 40px 0;
-            padding: 30px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-        }}
-        
-        .news-header {{
-            color: #2c3e50;
-            font-size: 1.8em;
-            margin-top: 0;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #3498db;
-            padding-bottom: 10px;
-        }}
-        
-        .news-cards {{
-            display: grid;
-            gap: 20px;
-            margin-top: 20px;
-        }}
-        
-        .news-card {{
-            display: flex;
-            gap: 15px;
-            background-color: white;
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #3498db;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }}
-        
-        .news-card:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }}
-        
-        .news-image {{
-            width: 120px;
-            height: 120px;
-            object-fit: cover;
-            border-radius: 4px;
-            flex-shrink: 0;
-        }}
-        
-        .news-content {{
-            flex: 1;
-        }}
-        
-        .news-content h3 {{
-            margin: 0 0 8px 0;
-            font-size: 1.1em;
-        }}
-        
-        .news-content h3 a {{
-            color: #2c3e50;
-            text-decoration: none;
-        }}
-        
-        .news-content h3 a:hover {{
-            color: #3498db;
-            text-decoration: underline;
-        }}
-        
-        .news-source {{
-            color: #7f8c8d;
-            font-size: 0.85em;
-            margin: 0 0 8px 0;
-            font-style: italic;
-        }}
-        
-        .news-summary {{
-            color: #666;
-            font-size: 0.95em;
-            margin: 0;
-        }}
-        
-        strong {{
-            color: #2c3e50;
-            font-weight: 600;
-        }}
-        
-        em {{
-            color: #7f8c8d;
-            font-style: italic;
-        }}
-        
-        @media (max-width: 768px) {{
-            .container {{
-                padding: 20px;
-            }}
-            
-            h1 {{
-                font-size: 2em;
-            }}
-            
-            .news-card {{
-                flex-direction: column;
-            }}
-            
-            .news-image {{
-                width: 100%;
-                height: 200px;
-            }}
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        {featured_image_html}
-        {main_content}
-        {news_cards_html}
-    </div>
-</body>
-</html>'''
-        
-        return html
+                markdown += f"### [{news['title']}]({news['url']})\n"
+                markdown += f"* **출처**: {news.get('source', 'Unknown Source')}\n"
+                if news_image:
+                    markdown += f"![뉴스 이미지]({news_image})\n"
+                markdown += f"> {news['summary'][:150]}...\n\n"
+                
+        return markdown
         
         # 전체 HTML 문서
         html = f'''<!DOCTYPE html>
@@ -930,7 +692,7 @@ HTML 형식으로 블로그 본문만 작성해주세요. (DOCTYPE이나 head, b
         """
         try:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"{timestamp}_{keyword}.html"
+            filename = f"{timestamp}_{keyword}.md"
             filepath = os.path.join(self.blog_posts_dir, filename)
             
             with open(filepath, 'w', encoding='utf-8') as f:

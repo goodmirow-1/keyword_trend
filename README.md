@@ -9,6 +9,8 @@ Google Trends에서 실시간 인기 키워드를 추출하여 AI가 자동으�
 - 📰 **관련 뉴스 자동 수집**: 키워드 관련 최신 뉴스 3개 자동 추가 (출처 표기 포함)
 - 🖼️ **대표 이미지 자동 삽입**: Google 이미지 검색에서 관련 이미지 자동 다운로드
 - 🔍 **SEO 최적화**: Meta tags, Open Graph, Twitter Card 자동 생성
+- 📝 **Markdown 출력**: Jekyll, Hugo 등 정적 사이트 생성기 호환 마크다운 파일 생성
+- 📊 **YAML Frontmatter**: 제목, 날짜, 카테고리, 태그 등 메타데이터 자동 생성
 - 📱 **반응형 디자인**: 모바일/태블릿/데스크톱 완벽 대응
 - ⏰ **자동 스케줄링**: 매일 정해진 시간에 자동 실행 (08:00, 12:00, 16:00, 20:00)
 - 🔄 **중복 방지**: 이미 사용한 키워드는 자동으로 제외
@@ -91,10 +93,10 @@ python3 trend_blog_system.py
 ls blog_posts/
 ```
 
-생성된 HTML 파일을 브라우저로 열어서 확인:
+생성된 Markdown 파일을 텍스트 에디터로 확인:
 
 ```bash
-open blog_posts/20260107_165629_키워드.html
+cat blog_posts/20260107_165629_키워드.md
 ```
 
 ## 📁 프로젝트 구조
@@ -108,14 +110,14 @@ keyword_trend/
 ├── README.md               # 프로젝트 설명서
 ├── blog_posts/             # 생성된 블로그 포스트 (gitignore)
 │   ├── images/            # 다운로드된 이미지
-│   └── *.html             # 생성된 HTML 파일
+│   └── *.md               # 생성된 Markdown 파일
 ├── used_keywords.json      # 사용된 키워드 기록 (gitignore)
 └── system_log.txt          # 시스템 로그 (gitignore)
 ```
 
 ## 🎨 생성되는 블로그 구조
 
-1. **제목** (h1)
+1. **YAML Frontmatter** (메타데이터)
 2. **대표 이미지** (Google 이미지 검색 결과)
 3. **본문 내용** (AI 생성 콘텐츠)
 4. **관련 뉴스** (맨 아래)
