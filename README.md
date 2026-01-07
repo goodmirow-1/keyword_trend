@@ -14,6 +14,8 @@ Google Trends에서 실시간 인기 키워드를 추출하여 AI가 자동으�
 - 📱 **반응형 디자인**: 모바일/태블릿/데스크톱 완벽 대응
 - ⏰ **자동 스케줄링**: 매일 정해진 시간에 자동 실행 (08:00, 12:00, 16:00, 20:00)
 - 🔄 **중복 방지**: 이미 사용한 키워드는 자동으로 제외
+- 🌐 **WordPress 자동 포스팅**: WordPress REST API를 통한 자동 게시 (NEW!)
+- 🏷️ **카테고리/태그 자동 관리**: "생활" 카테고리 및 태그 자동 생성 및 적용
 
 ## 📋 요구사항
 
@@ -76,7 +78,7 @@ WORDPRESS_APP_PASSWORD=your_application_password
 
 ## 💻 사용 방법
 
-### 기본 실행
+### 기본 실행 (로컬 파일만 저장)
 
 ```bash
 python3 trend_blog_system.py
@@ -86,6 +88,20 @@ python3 trend_blog_system.py
 1. 즉시 첫 번째 블로그 포스트 생성
 2. 이후 매일 08:00, 12:00, 16:00, 20:00에 자동 실행
 3. `Ctrl+C`로 중지 가능
+
+### WordPress 자동 포스팅 (NEW!)
+
+WordPress에 자동으로 게시하려면:
+
+```bash
+python3 wordpress_trend_blog.py
+```
+
+실행하면:
+1. 트렌드 키워드 수집 및 AI 콘텐츠 생성
+2. 로컬 파일로 저장
+3. **WordPress에 자동 포스팅** ("생활" 카테고리)
+4. 태그 자동 생성 및 적용
 
 ### 생성된 파일 확인
 
@@ -103,9 +119,11 @@ cat blog_posts/20260107_165629_키워드.md
 
 ```
 keyword_trend/
-├── trend_blog_system.py    # 메인 시스템 코드
+├── trend_blog_system.py    # 메인 시스템 코드 (로컬 저장)
+├── wordpress_trend_blog.py # WordPress 자동 포스팅 (NEW!)
 ├── requirements.txt         # Python 패키지 목록
 ├── .env.example            # 환경 변수 예제
+├── .env                    # 환경 변수 설정 (gitignore)
 ├── .gitignore              # Git 제외 파일 목록
 ├── README.md               # 프로젝트 설명서
 ├── blog_posts/             # 생성된 블로그 포스트 (gitignore)
@@ -148,18 +166,47 @@ schedule.every().day.at("20:00").do(system.run_blog_creation)
 self.model = genai.GenerativeModel('gemini-pro')  # 또는 다른 모델
 ```
 
-## 🌐 워드프레스 연동
+## 🌐 WordPress 자동 포스팅 (NEW!)
 
-생성된 HTML 파일을 워드프레스에 게시하는 방법:
+WordPress REST API를 통해 생성된 블로그를 자동으로 게시할 수 있습니다.
 
-### 방법 1: 수동 게시
-1. 생성된 HTML 파일 열기
-2. 내용 복사
-3. 워드프레스 편집기에서 "코드 편집기" 모드로 전환
-4. 붙여넣기
+### WordPress 설정 방법
 
-### 방법 2: REST API 자동 게시 (개발 예정)
-`.env` 파일에 워드프레스 정보 입력 후 자동 게시
+#### 1. Application Password 생성
+
+WordPress 관리자 페이지에서:
+1. **사용자** → **프로필** 이동
+2. **Application Passwords** 섹션 찾기
+3. 새 애플리케이션 이름 입력 (예: "Trend Blog System")
+4. **Add New Application Password** 클릭
+5. 생성된 비밀번호 복사 (공백 포함)
+
+#### 2. .env 파일 설정
+
+```env
+# WordPress 설정
+WORDPRESS_URL=https://your-wordpress-site.com
+WORDPRESS_USERNAME=your_username
+WORDPRESS_APP_PASSWORD=xxxx xxxx xxxx xxxx xxxx xxxx
+```
+
+#### 3. 실행
+
+```bash
+python3 wordpress_trend_blog.py
+```
+
+### 주요 기능
+
+- ✅ **자동 카테고리 관리**: "생활" 카테고리 자동 생성
+- ✅ **태그 자동 적용**: Frontmatter에서 추출한 태그 자동 생성 및 적용
+- ✅ **Markdown → HTML 변환**: WordPress 호환 HTML로 자동 변환
+- ✅ **이미지 포함**: 본문 이미지 자동 포함
+- ✅ **로컬 백업**: WordPress 포스팅과 별도로 로컬 파일 저장
+
+### 포스팅 결과 확인
+
+WordPress 관리자 페이지 → **글** → **모든 글**에서 확인 가능합니다.
 
 ## 📊 로그 확인
 
