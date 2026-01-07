@@ -1,0 +1,6 @@
+pytrends
+schedule
+google-generativeai
+python-dotenv
+playwright
+requests
