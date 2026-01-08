@@ -9,7 +9,7 @@ from wordpress_trend_blog import WordPressTrendBlogSystem
 
 # 페이지 설정
 st.set_page_config(
-    page_title="Trend Blog Dashboard",
+    page_title="트렌드 블로그 관리자",
     page_icon="🔥",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -69,29 +69,29 @@ def get_systems():
 trend_sys, wp_sys = get_systems()
 
 # 사이드바
-st.sidebar.title("🔥 Trend Blog Admin")
+st.sidebar.title("🔥 트렌드 블로그 관리")
 st.sidebar.markdown("---")
-menu = st.sidebar.radio("Menu", ["Dashboard", "Keyword Generator", "Post Management", "Used Keywords", "System Logs"])
+menu = st.sidebar.radio("메뉴", ["시스템 개요", "키워드 생성기", "포스트 관리", "사용된 키워드", "시스템 로그"])
 
 st.sidebar.markdown("---")
-st.sidebar.info(f"**Persona**: {trend_sys.persona.capitalize()}")
+st.sidebar.info(f"**페르소나**: {trend_sys.persona.capitalize()}")
 if trend_sys.tg_token:
-    st.sidebar.success("Telegram Notifications: ON")
+    st.sidebar.success("텔레그램 알림: 활성화")
 else:
-    st.sidebar.warning("Telegram Notifications: OFF")
+    st.sidebar.warning("텔레그램 알림: 비활성화")
 
 # 메인 화면
-if menu == "Dashboard":
-    st.title("🚀 System Overview")
+if menu == "시스템 개요":
+    st.title("🚀 시스템 현황")
     
     col1, col2, col3, col4 = st.columns(4)
     
     # 0. 스마트 작업 실행
     with col1:
         st.markdown('<div class="status-card">', unsafe_allow_html=True)
-        st.subheader("💡 Smart Actions")
-        if st.button("🚀 Run: Write Next Trend"):
-            with st.spinner("Finding next unused trend & writing..."):
+        st.subheader("💡 스마트 액션")
+        if st.button("🚀 실행: 다음 트렌드 즉시 작성"):
+            with st.spinner("다음 미사용 트렌드 찾는 중..."):
                 # run_blog_creation logic inside dashboard
                 all_keywords = trend_sys.get_trending_keywords()
                 selected_kw = trend_sys.select_keyword(all_keywords)
@@ -100,25 +100,25 @@ if menu == "Dashboard":
                     content = wp_sys.generate_blog_content(selected_kw)
                     if content:
                         filepath = wp_sys.save_blog_post(selected_kw, content)
-                        st.success(f"Generated: {selected_kw}")
+                        st.success(f"생성 완료: {selected_kw}")
                         # 워드프레스 설정이 있으면 자동 포스팅 시도
                         if wp_sys.wp_url:
                             title = wp_sys.extract_title_from_markdown(content)
                             tags = wp_sys.extract_tags_from_markdown(content) or [selected_kw]
                             wp_sys.post_to_wordpress(title, content, tags)
                             st.balloons()
-                            st.success("And posted to WordPress!")
+                            st.success("워드프레스 포스팅 성공!")
                         st.session_state.selected_preview = os.path.basename(filepath)
                 else:
-                    st.warning("No unused trends found currently.")
+                    st.warning("현재 사용 가능한 새로운 트렌드가 없습니다.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # 1. 최신 키워드 현황
     with col2:
         st.markdown('<div class="status-card">', unsafe_allow_html=True)
-        st.subheader("📈 Trending Discovery")
-        if st.button("Refresh Keywords"):
-            with st.spinner("Fetching Google Trends..."):
+        st.subheader("📈 실시간 트렌드")
+        if st.button("키워드 새로고침"):
+            with st.spinner("구글 트렌드 불러오는 중..."):
                 all_keywords = trend_sys.get_trending_keywords()
                 used_keywords = trend_sys._load_used_keywords()
                 st.session_state.keywords = [kw for kw in all_keywords if kw not in used_keywords]
@@ -128,130 +128,123 @@ if menu == "Dashboard":
             for kw in keywords[:10]:
                 st.markdown(f'<span class="keyword-badge">{kw}</span>', unsafe_allow_html=True)
         else:
-            st.write("Click 'Refresh' to see trends.")
+            st.write("새로고침 버튼을 눌러주세요.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # 2. 최근 생성된 글
     with col3:
         st.markdown('<div class="status-card">', unsafe_allow_html=True)
-        st.subheader("📝 Recent Posts")
+        st.subheader("📝 최근 생성 포스트")
         posts = sorted([f for f in os.listdir(trend_sys.blog_posts_dir) if f.endswith('.md')], reverse=True)
         if posts:
             for post in posts[:10]:
                 if st.button(f"📄 {post[:30]}", key=f"dash_{post}"):
                     st.session_state.selected_preview = post
         else:
-            st.write("No posts generated yet.")
+            st.write("아직 생성된 포스트가 없습니다.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # 퀵 미리보기 섹션
     if st.session_state.get('selected_preview'):
         selected_file = st.session_state.selected_preview
-        st.markdown(f"### 🔍 Quick Preview: {selected_file}")
+        st.markdown(f"### 🔍 빠른 미리보기: {selected_file}")
         filepath = os.path.join(trend_sys.blog_posts_dir, selected_file)
         if os.path.exists(filepath):
             with open(filepath, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            # 이미지 경로 처리 (상대 경로 -> Streamlit에서 보이게)
-            # Streamlit은 현재 디렉토리 기준이므로 blog_posts/images/... 를 찾을 수 있어야 함
-            # MD 파일 내부에는 images/... 로 되어 있으므로 이를 blog_posts/images/... 로 치환
-            preview_content = content.replace("](images/", "](app/blog_posts/images/")
-            
-            with st.expander("Show/Hide Content", expanded=True):
-                st.markdown(content) # 일단 원본으로 시도 (Streamlit 세팅에 따라 다름)
+            with st.expander("내용 보기/숨기기", expanded=True):
+                st.markdown(content)
                 
                 col_p1, col_p2 = st.columns(2)
                 with col_p1:
-                    if st.button("Close Preview"):
+                    if st.button("미리보기 닫기"):
                         st.session_state.selected_preview = None
                         st.rerun()
                 with col_p2:
-                    if st.button("Manage this post"):
-                        # Post Management 메뉴로 이동 (구현 편의상 현재 선택된 파일만 설정)
+                    if st.button("이 포스트 관리하기"):
                         st.session_state.manage_file = selected_file
-                        # menu를 바꾸려면 radio 설정을 state와 연동해야 함
-                        st.info("Post Management 탭에서 해당 파일을 선택해 주세요.")
+                        st.info("포스트 관리 탭에서 해당 파일을 선택해 주세요.")
         else:
-            st.error("File not found.")
+            st.error("파일을 찾을 수 없습니다.")
 
     # 3. 시스템 상태
     with col4:
         st.markdown('<div class="status-card">', unsafe_allow_html=True)
-        st.subheader("⚙️ System Status")
-        st.write(f"**API Ready**: {'✅' if trend_sys.client_ready else '❌'}")
-        st.write(f"**WP Ready**: {'✅' if wp_sys.wp_url else '❌'}")
-        st.write(f"**Total Posts**: {len(posts)}")
+        st.subheader("⚙️ 시스템 상태")
+        st.write(f"**API 준비**: {'✅' if trend_sys.client_ready else '❌'}")
+        st.write(f"**WP 준비**: {'✅' if wp_sys.wp_url else '❌'}")
+        st.write(f"**총 포스트 수**: {len(posts)}")
         st.markdown('</div>', unsafe_allow_html=True)
 
-elif menu == "Keyword Generator":
-    st.title("🎯 Keyword Generator")
+elif menu == "키워드 생성기":
+    st.title("🎯 키워드 생성기")
     st.write("트렌드 키워드를 선택하거나 직접 입력하여 블로그를 생성합니다.")
     
-    tab1, tab2 = st.tabs(["Trends List", "Manual Input"])
+    tab1, tab2 = st.tabs(["트렌드 목록", "직접 입력"])
     
     with tab1:
-        if st.button("Fetch Current Trends"):
+        if st.button("현재 트렌드 가져오기"):
             all_keywords = trend_sys.get_trending_keywords()
             used_keywords = trend_sys._load_used_keywords()
             st.session_state.keywords = [kw for kw in all_keywords if kw not in used_keywords]
             
         keywords = st.session_state.get('keywords', [])
         if keywords:
-            selected_kw = st.selectbox("Select a keyword to write about:", keywords)
-            do_post = st.checkbox("Post to WordPress immediately?", value=True)
+            selected_kw = st.selectbox("작성할 키워드 선택:", keywords)
+            do_post = st.checkbox("워드프레스에 즉시 포스팅하시겠습니까?", value=False)
             
-            if st.button("Generate & Publish"):
+            if st.button("생성 및 발행"):
                 used_keywords = wp_sys._load_used_keywords()
                 if selected_kw in used_keywords:
                     st.error(f"'{selected_kw}'은(는) 이미 작성된 키워드입니다.")
                 else:
-                    with st.spinner(f"Creating blog for '{selected_kw}'..."):
+                    with st.spinner(f"'{selected_kw}' 블로그 생성 중..."):
                         # WordPress 시스템의 run_blog_creation을 활용하되, 특정 키워드만 처리하도록 로직이 필요함
                         # 여기서는 직접 메서드들을 호출
                         content = wp_sys.generate_blog_content(selected_kw)
                         if content:
                             filepath = wp_sys.save_blog_post(selected_kw, content)
-                            st.success(f"Blog saved to {filepath}")
+                            st.success(f"블로그 저장 완료: {filepath}")
                             if do_post:
                                 title = wp_sys.extract_title_from_markdown(content)
                                 tags = wp_sys.extract_tags_from_markdown(content) or [selected_kw]
                                 success = wp_sys.post_to_wordpress(title, content, tags)
                                 if success:
                                     st.balloons()
-                                    st.success("Successfully posted to WordPress!")
-                                    if st.button("View Generated Post"):
+                                    st.success("워드프레스 포스팅 성공!")
+                                    if st.button("생성된 포스트 보기"):
                                         st.session_state.selected_preview = os.path.basename(filepath)
                                         st.rerun()
                         else:
-                            st.error("Failed to generate content.")
+                            st.error("콘텐츠 생성에 실패했습니다.")
         else:
-            st.info("Fetch trends first.")
+            st.info("먼저 트렌드를 가져와주세요.")
 
     with tab2:
-        manual_kw = st.text_input("Enter a specific keyword:")
-        if st.button("Generate Manual Post") and manual_kw:
+        manual_kw = st.text_input("직접 키워드 입력:")
+        if st.button("수동 생성 실행") and manual_kw:
             used_keywords = wp_sys._load_used_keywords()
             if manual_kw in used_keywords:
                 st.error(f"'{manual_kw}'은(는) 이미 작성된 키워드입니다.")
             else:
-                with st.spinner(f"Creating blog for '{manual_kw}'..."):
+                with st.spinner(f"'{manual_kw}' 블로그 생성 중..."):
                     content = wp_sys.generate_blog_content(manual_kw)
                     if content:
                         filepath = wp_sys.save_blog_post(manual_kw, content)
-                        st.success("Blog generated successfully.")
-                        if st.button("View Generated Post", key="view_manual"):
+                        st.success("블로그 생성이 완료되었습니다.")
+                        if st.button("생성된 포스트 보기", key="view_manual"):
                             st.session_state.selected_preview = os.path.basename(filepath)
                             st.rerun()
                     else:
-                        st.error("Failed to generate content.")
+                        st.error("콘텐츠 생성에 실패했습니다.")
 
-elif menu == "Post Management":
-    st.title("📁 Post Management")
+elif menu == "포스트 관리":
+    st.title("📁 포스트 관리")
     posts = sorted([f for f in os.listdir(trend_sys.blog_posts_dir) if f.endswith('.md')], reverse=True)
     
     if not posts:
-        st.write("No posts found.")
+        st.write("발견된 포스트가 없습니다.")
     else:
         # Pre-selection logic from Dashboard
         default_index = 0
@@ -259,7 +252,7 @@ elif menu == "Post Management":
         if managed_file in posts:
             default_index = posts.index(managed_file)
             
-        selected_file = st.selectbox("Select a post to view/publish:", posts, index=default_index)
+        selected_file = st.selectbox("조회/발행할 포스트 선택:", posts, index=default_index)
         filepath = os.path.join(trend_sys.blog_posts_dir, selected_file)
         
         with open(filepath, 'r', encoding='utf-8') as f:
@@ -272,52 +265,52 @@ elif menu == "Post Management":
             st.markdown(content)
             
         with col_action:
-            st.subheader("Actions")
-            if st.button("Post to WordPress"):
+            st.subheader("액션")
+            if st.button("워드프레스에 포스팅"):
                 title = wp_sys.extract_title_from_markdown(content)
                 tags = wp_sys.extract_tags_from_markdown(content)
-                with st.spinner("Posting to WordPress..."):
+                with st.spinner("워드프레스에 포스팅 중..."):
                     success = wp_sys.post_to_wordpress(title, content, tags)
                     if success:
-                        st.success("Posted!")
+                        st.success("포스팅 완료!")
             
-            if st.button("Delete File"):
+            if st.button("파일 삭제"):
                 os.remove(filepath)
-                st.warning("File deleted.")
+                st.warning("파일이 삭제되었습니다.")
                 st.rerun()
 
-elif menu == "Used Keywords":
-    st.title("📚 Used Keywords Management")
+elif menu == "사용된 키워드":
+    st.title("📚 사용된 키워드 관리")
     st.write("이미 사용된 키워드 목록을 확인하고 관리합니다.")
     
     used_keywords = trend_sys._load_used_keywords()
     
     if not used_keywords:
-        st.info("No used keywords yet.")
+        st.info("아직 사용된 키워드가 없습니다.")
     else:
         # 키워드 데이터프레임으로 표시
-        df = pd.DataFrame(used_keywords, columns=["Keyword"])
+        df = pd.DataFrame(used_keywords, columns=["키워드"])
         df = df.iloc[::-1] # 최신순
         
-        st.markdown(f"**Total Used Keywords**: {len(used_keywords)}")
+        st.markdown(f"**총 사용 키워드**: {len(used_keywords)}")
         
         # 삭제 기능을 위한 멀티셀렉트
-        to_delete = st.multiselect("Select keywords to delete:", used_keywords)
+        to_delete = st.multiselect("삭제할 키워드 선택:", used_keywords)
         
-        if st.button("Delete Selected Keywords"):
+        if st.button("선택한 키워드 삭제"):
             if to_delete:
                 new_list = [kw for kw in used_keywords if kw not in to_delete]
                 trend_sys._save_used_keywords(new_list)
-                st.success(f"{len(to_delete)} keywords deleted.")
+                st.success(f"{len(to_delete)}개의 키워드가 삭제되었습니다.")
                 st.rerun()
             else:
-                st.warning("Please select keywords to delete.")
+                st.warning("삭제할 키워드를 선택해주세요.")
         
         st.markdown("---")
         st.table(df)
 
-elif menu == "System Logs":
-    st.title("🪵 System Logs")
+elif menu == "시스템 로그":
+    st.title("🪵 시스템 로그")
     st.write("`system_log.txt` 실시간 로그 확인")
     
     if os.path.exists(trend_sys.log_file):
@@ -328,12 +321,12 @@ elif menu == "System Logs":
         log_text = "".join(logs[-100:]).replace("\n", "<br>")
         st.markdown(f'<div class="log-container">{log_text}</div>', unsafe_allow_html=True)
         
-        if st.button("Clear Logs"):
+        if st.button("로그 비우기"):
             with open(trend_sys.log_file, 'w', encoding='utf-8') as f:
                 f.write("")
             st.rerun()
     else:
-        st.write("Log file not found.")
+        st.write("로그 파일을 찾을 수 없습니다.")
 
 st.sidebar.markdown("---")
-st.sidebar.caption(f"Last updated: {datetime.now().strftime('%H:%M:%S')}")
+st.sidebar.caption(f"마지막 업데이트: {datetime.now().strftime('%H:%M:%S')}")
