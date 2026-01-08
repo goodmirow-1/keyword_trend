@@ -226,10 +226,12 @@ class WordPressTrendBlogSystem(TrendBlogSystem):
             
             post_link = response.json().get('link')
             self._log(f"WordPress 포스팅 성공: {post_link}")
+            self._send_telegram_notification(f"🌐 *워드프레스 포스팅 완료*\n\n*제목*: {title}\n*링크*: {post_link}")
             return True
             
         except Exception as e:
             self._log(f"WordPress 포스팅 오류: {e}")
+            self._send_telegram_notification(f"⚠️ *워드프레스 포스팅 오류*\n\n*제목*: {title}\n*오류*: `{str(e)[:100]}`")
             if 'response' in locals() and response:
                 self._log(f"응답: {response.text}")
             return False

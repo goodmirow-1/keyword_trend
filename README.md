@@ -107,6 +107,26 @@ python3 wordpress_trend_blog.py --doPost
 python3 wordpress_trend_blog.py
 ```
 
+### 📊 관리 대시보드 (NEW!)
+
+Streamlit을 사용하여 생성된 글을 관리하고 실시간 트렌드를 확인할 수 있습니다:
+
+```bash
+streamlit run dashboard.py
+```
+
+- **Dashboard**: 시스템 상태 및 최근 포스팅 현황 요약
+- **Keyword Generator**: 실시간 트렌드 키워드 조회 및 즉시 블로그 생성
+- **Post Management**: 생성된 로컬 마크다운 파일 관리 및 수동 워드프레스 포스팅
+- **System Logs**: 시스템 로그 실시간 확인
+
+### 🔔 실시간 알림 (NEW!)
+
+텔레그램 봇을 연동하여 블로그 생성 및 포스팅 결과를 실시간으로 받을 수 있습니다.
+1. [BotFather](https://t.me/botfather)를 통해 봇 생성 및 토큰 획득
+2. [GetIDs Bot](https://t.me/getidsbot) 등을 통해 본인의 Chat ID 확인
+3. `.env` 파일에 `TELEGRAM_TOKEN` 및 `TELEGRAM_CHAT_ID` 입력
+
 실행하면:
 1. 트렌드 키워드 수집 및 AI 콘텐츠 생성
 2. 로컬 파일(`blog_posts/`)로 저장

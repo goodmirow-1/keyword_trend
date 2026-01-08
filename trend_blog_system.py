@@ -34,6 +34,12 @@ class TrendBlogSystem:
         # 블로그 페르소나 설정 (friendly, professional, analytical)
         self.persona = os.getenv('BLOG_PERSONA', 'friendly').lower()
         self._log(f"블로그 페르소나 설정: {self.persona}")
+        
+        # 텔레그램 알림 설정
+        self.tg_token = os.getenv('TELEGRAM_TOKEN')
+        self.tg_chat_id = os.getenv('TELEGRAM_CHAT_ID')
+        if self.tg_token and self.tg_chat_id:
+            self._log("텔레그램 알림 활성화됨")
             
         # 초기화: 디렉토리 및 파일 생성
         if not os.path.exists(self.blog_posts_dir):
@@ -50,6 +56,24 @@ class TrendBlogSystem:
         
         with open(self.log_file, 'a', encoding='utf-8') as f:
             f.write(log_message + '\n')
+            
+    def _send_telegram_notification(self, message):
+        """텔레그램 알림 전송"""
+        if not self.tg_token or not self.tg_chat_id:
+            return
+            
+        try:
+            import requests
+            url = f"https://api.telegram.org/bot{self.tg_token}/sendMessage"
+            data = {
+                "chat_id": self.tg_chat_id,
+                "text": message,
+                "parse_mode": "Markdown"
+            }
+            response = requests.post(url, data=data, timeout=10)
+            response.raise_for_status()
+        except Exception as e:
+            self._log(f"텔레그램 알림 전송 실패: {e}")
     
     def _load_used_keywords(self):
         """이미 사용된 키워드 목록 불러오기"""
@@ -1089,8 +1113,10 @@ class TrendBlogSystem:
         
         if filepath:
             self._log(f"블로그 작성 완료: {selected_keyword}")
+            self._send_telegram_notification(f"✅ *블로그 생성 완료*\n\n*키워드*: {selected_keyword}\n*파일*: `{os.path.basename(filepath)}`")
         else:
             self._log("블로그 저장에 실패했습니다.")
+            self._send_telegram_notification(f"❌ *블로그 생성 실패*\n\n*키워드*: {selected_keyword}\n*원인*: 파일 저장 실패")
         
         self._log("블로그 작성 프로세스 종료")
         self._log("=" * 50)
