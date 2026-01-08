@@ -110,11 +110,43 @@ if menu == "Dashboard":
         st.subheader("📝 Recent Posts")
         posts = sorted([f for f in os.listdir(trend_sys.blog_posts_dir) if f.endswith('.md')], reverse=True)
         if posts:
-            for post in posts[:5]:
-                st.write(f"📄 {post[:25]}...")
+            for post in posts[:10]:
+                if st.button(f"📄 {post[:30]}", key=f"dash_{post}"):
+                    st.session_state.selected_preview = post
         else:
             st.write("No posts generated yet.")
         st.markdown('</div>', unsafe_allow_html=True)
+
+    # 퀵 미리보기 섹션
+    if st.session_state.get('selected_preview'):
+        selected_file = st.session_state.selected_preview
+        st.markdown(f"### 🔍 Quick Preview: {selected_file}")
+        filepath = os.path.join(trend_sys.blog_posts_dir, selected_file)
+        if os.path.exists(filepath):
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # 이미지 경로 처리 (상대 경로 -> Streamlit에서 보이게)
+            # Streamlit은 현재 디렉토리 기준이므로 blog_posts/images/... 를 찾을 수 있어야 함
+            # MD 파일 내부에는 images/... 로 되어 있으므로 이를 blog_posts/images/... 로 치환
+            preview_content = content.replace("](images/", "](app/blog_posts/images/")
+            
+            with st.expander("Show/Hide Content", expanded=True):
+                st.markdown(content) # 일단 원본으로 시도 (Streamlit 세팅에 따라 다름)
+                
+                col_p1, col_p2 = st.columns(2)
+                with col_p1:
+                    if st.button("Close Preview"):
+                        st.session_state.selected_preview = None
+                        st.rerun()
+                with col_p2:
+                    if st.button("Manage this post"):
+                        # Post Management 메뉴로 이동 (구현 편의상 현재 선택된 파일만 설정)
+                        st.session_state.manage_file = selected_file
+                        # menu를 바꾸려면 radio 설정을 state와 연동해야 함
+                        st.info("Post Management 탭에서 해당 파일을 선택해 주세요.")
+        else:
+            st.error("File not found.")
 
     # 3. 시스템 상태
     with col3:
@@ -161,6 +193,9 @@ elif menu == "Keyword Generator":
                             if success:
                                 st.balloons()
                                 st.success("Successfully posted to WordPress!")
+                                if st.button("View Generated Post"):
+                                    st.session_state.selected_preview = os.path.basename(filepath)
+                                    st.rerun()
                     else:
                         st.error("Failed to generate content.")
         else:
@@ -176,8 +211,11 @@ elif menu == "Keyword Generator":
                 with st.spinner(f"Creating blog for '{manual_kw}'..."):
                 content = wp_sys.generate_blog_content(manual_kw)
                 if content:
-                    wp_sys.save_blog_post(manual_kw, content)
+                    filepath = wp_sys.save_blog_post(manual_kw, content)
                     st.success("Blog generated successfully.")
+                    if st.button("View Generated Post", key="view_manual"):
+                        st.session_state.selected_preview = os.path.basename(filepath)
+                        st.rerun()
                 else:
                     st.error("Failed to generate content.")
 
@@ -188,7 +226,13 @@ elif menu == "Post Management":
     if not posts:
         st.write("No posts found.")
     else:
-        selected_file = st.selectbox("Select a post to view/publish:", posts)
+        # Pre-selection logic from Dashboard
+        default_index = 0
+        managed_file = st.session_state.get('manage_file')
+        if managed_file in posts:
+            default_index = posts.index(managed_file)
+            
+        selected_file = st.selectbox("Select a post to view/publish:", posts, index=default_index)
         filepath = os.path.join(trend_sys.blog_posts_dir, selected_file)
         
         with open(filepath, 'r', encoding='utf-8') as f:
