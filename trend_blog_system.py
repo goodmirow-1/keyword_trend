@@ -36,8 +36,8 @@ class TrendBlogSystem:
         self._log(f"블로그 페르소나 설정: {self.persona}")
         
         # 텔레그램 알림 설정
-        self.tg_token = os.getenv('TELEGRAM_TOKEN')
-        self.tg_chat_id = os.getenv('TELEGRAM_CHAT_ID')
+        self.tg_token = os.getenv('TELEGRAM_TOKEN', '').strip()
+        self.tg_chat_id = os.getenv('TELEGRAM_CHAT_ID', '').strip()
         if self.tg_token and self.tg_chat_id:
             self._log("텔레그램 알림 활성화됨")
             

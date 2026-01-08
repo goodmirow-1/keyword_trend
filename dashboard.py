@@ -176,6 +176,27 @@ if menu == "시스템 개요":
         st.write(f"**API 준비**: {'✅' if trend_sys.client_ready else '❌'}")
         st.write(f"**WP 준비**: {'✅' if wp_sys.wp_url else '❌'}")
         st.write(f"**총 포스트 수**: {len(posts)}")
+        
+        st.markdown("---")
+        st.subheader("🔔 알림 테스트")
+        if trend_sys.tg_token:
+            if st.button("텔레그램 테스트 메시지 전송"):
+                with st.spinner("전송 중..."):
+                    # 직접 성공/실패 여부를 알기 위해 _send_telegram_notification 수정 없이 여기서 시도
+                    import requests
+                    url = f"https://api.telegram.org/bot{trend_sys.tg_token}/sendMessage"
+                    data = {"chat_id": trend_sys.tg_chat_id, "text": "✅ 대시보드 연결 테스트 메시지입니다!"}
+                    try:
+                        res = requests.post(url, data=data, timeout=5)
+                        if res.status_code == 200:
+                            st.success("전송 성공!")
+                        else:
+                            st.error(f"실패: {res.json().get('description')}")
+                            st.info("💡 도움이 필요하세요? 봇이 채널에 '관리자'로 초대되어 있는지, ID가 정확한지 확인해 주세요.")
+                    except Exception as e:
+                        st.error(f"오류: {e}")
+        else:
+            st.warning("텔레그램 설정이 없습니다.")
         st.markdown('</div>', unsafe_allow_html=True)
 
 elif menu == "키워드 생성기":
