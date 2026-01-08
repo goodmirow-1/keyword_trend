@@ -73,7 +73,10 @@ class TrendBlogSystem:
             response = requests.post(url, data=data, timeout=10)
             response.raise_for_status()
         except Exception as e:
-            self._log(f"텔레그램 알림 전송 실패: {e}")
+            error_details = f"{e}"
+            if 'response' in locals():
+                error_details += f" (응답: {response.text})"
+            self._log(f"텔레그램 알림 전송 실패: {error_details}")
     
     def _load_used_keywords(self):
         """이미 사용된 키워드 목록 불러오기"""

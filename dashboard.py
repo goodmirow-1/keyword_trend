@@ -101,6 +101,7 @@ if menu == "시스템 개요":
                     if content:
                         filepath = wp_sys.save_blog_post(selected_kw, content)
                         st.success(f"생성 완료: {selected_kw}")
+                        wp_sys._send_telegram_notification(f"✅ *블로그 로컬 저장 완료*\n\n*키워드*: {selected_kw}\n*파일*: `{os.path.basename(filepath)}`")
                         # 워드프레스 설정이 있으면 자동 포스팅 시도
                         if wp_sys.wp_url:
                             title = wp_sys.extract_title_from_markdown(content)
@@ -206,6 +207,7 @@ elif menu == "키워드 생성기":
                         if content:
                             filepath = wp_sys.save_blog_post(selected_kw, content)
                             st.success(f"블로그 저장 완료: {filepath}")
+                            wp_sys._send_telegram_notification(f"✅ *블로그 로컬 저장 완료*\n\n*키워드*: {selected_kw}\n*파일*: `{os.path.basename(filepath)}`")
                             if do_post:
                                 title = wp_sys.extract_title_from_markdown(content)
                                 tags = wp_sys.extract_tags_from_markdown(content) or [selected_kw]
@@ -233,6 +235,7 @@ elif menu == "키워드 생성기":
                     if content:
                         filepath = wp_sys.save_blog_post(manual_kw, content)
                         st.success("블로그 생성이 완료되었습니다.")
+                        wp_sys._send_telegram_notification(f"✅ *블로그 수동 생성 완료*\n\n*키워드*: {manual_kw}")
                         if st.button("생성된 포스트 보기", key="view_manual"):
                             st.session_state.selected_preview = os.path.basename(filepath)
                             st.rerun()
