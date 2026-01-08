@@ -18,7 +18,7 @@ class WordPressTrendBlogSystem(TrendBlogSystem):
         self.wp_url = os.getenv('WORDPRESS_URL')
         self.wp_username = os.getenv('WORDPRESS_USERNAME')
         self.wp_app_password = os.getenv('WORDPRESS_APP_PASSWORD')
-        self.wp_category = "생활"  # 기본 카테고리
+        self.wp_category = "이슈트래킹"  # 기본 카테고리 설정 (모든 글 통일)
         
         if self.wp_url:
             self._log(f"WordPress 설정 완료: {self.wp_url}")
@@ -234,12 +234,15 @@ class WordPressTrendBlogSystem(TrendBlogSystem):
                 self._log(f"응답: {response.text}")
             return False
     
-    def run_blog_creation(self):
+    def run_blog_creation(self, do_post=False):
         """
         전체 블로그 작성 프로세스 실행 (WordPress 포스팅 포함)
+        
+        Args:
+            do_post (bool): True일 경우에만 워드프레스에 포스팅 수행
         """
         self._log("=" * 50)
-        self._log("블로그 작성 프로세스 시작")
+        self._log(f"블로그 작성 프로세스 시작 (doPost={do_post})")
         
         # 1. 트렌드 키워드 가져오기
         keywords = self.get_trending_keywords()
@@ -255,7 +258,7 @@ class WordPressTrendBlogSystem(TrendBlogSystem):
             self._log("모든 키워드가 이미 사용되었습니다.")
             return
         
-        # 3. 블로그 콘텐츠 생성
+        # 3. 블로그 콘텐츠 생성 (부모 클래스의 메서드 사용 - 카테고리 로직 포함됨)
         content = self.generate_blog_content(selected_keyword)
         
         if not content:
@@ -268,14 +271,17 @@ class WordPressTrendBlogSystem(TrendBlogSystem):
         if filepath:
             self._log(f"블로그 작성 완료: {selected_keyword}")
             
-            # 5. WordPress에 포스팅
-            title = self.extract_title_from_markdown(content)
-            tags = self.extract_tags_from_markdown(content)
-            
-            if not tags:
-                tags = [selected_keyword]
-            
-            self.post_to_wordpress(title, content, tags)
+            # 5. WordPress에 포스팅 (do_post=True 일 때만)
+            if do_post:
+                title = self.extract_title_from_markdown(content)
+                tags = self.extract_tags_from_markdown(content)
+                
+                if not tags:
+                    tags = [selected_keyword]
+                
+                self.post_to_wordpress(title, content, tags)
+            else:
+                self._log("워드프레스 포스팅 생략 (doPost=False)")
         else:
             self._log("블로그 저장에 실패했습니다.")
         
@@ -285,25 +291,41 @@ class WordPressTrendBlogSystem(TrendBlogSystem):
 
 def main():
     """
-    메인 실행 함수 - 스케줄링 설정
+    메인 실행 함수 - 스케줄링 및 CLI 인자 처리
     """
     import schedule
     import time
+    import argparse
+    import sys
+    
+    # CLI 인자 파싱
+    parser = argparse.ArgumentParser(description='WordPress Trend Blog System')
+    parser.add_argument('--doPost', action='store_true', help='Set this flag to enable posting to WordPress')
+    args = parser.parse_args()
+    
+    start_msg = "블로그 자동 작성 시스템 시작"
+    if args.doPost:
+        start_msg += " (워드프레스 포스팅 활성화)"
+    else:
+        start_msg += " (워드프레스 포스팅 비활성화 - 파일만 저장)"
+    
+    print(start_msg)
     
     system = WordPressTrendBlogSystem()
     
     # 스케줄 설정: 오전 8시부터 4시간 간격
-    schedule.every().day.at("08:00").do(system.run_blog_creation)
-    schedule.every().day.at("12:00").do(system.run_blog_creation)
-    schedule.every().day.at("16:00").do(system.run_blog_creation)
-    schedule.every().day.at("20:00").do(system.run_blog_creation)
+    # 인자 전달을 위해 lambda 사용
+    schedule.every().day.at("08:00").do(lambda: system.run_blog_creation(do_post=args.doPost))
+    schedule.every().day.at("12:00").do(lambda: system.run_blog_creation(do_post=args.doPost))
+    schedule.every().day.at("16:00").do(lambda: system.run_blog_creation(do_post=args.doPost))
+    schedule.every().day.at("20:00").do(lambda: system.run_blog_creation(do_post=args.doPost))
     
-    print("블로그 자동 작성 시스템 시작 (WordPress 통합)")
     print("스케줄: 08:00, 12:00, 16:00, 20:00")
     print("중지하려면 Ctrl+C를 누르세요.")
     
     # 즉시 한 번 실행 (테스트용)
-    system.run_blog_creation()
+    print("초기 실행 중...")
+    system.run_blog_creation(do_post=args.doPost)
     
     # 스케줄 루프 실행
     while True:

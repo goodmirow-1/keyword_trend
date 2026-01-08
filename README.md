@@ -14,8 +14,8 @@ Google Trends에서 실시간 인기 키워드를 추출하여 AI가 자동으�
 - 📱 **반응형 디자인**: 모바일/태블릿/데스크톱 완벽 대응
 - ⏰ **자동 스케줄링**: 매일 정해진 시간에 자동 실행 (08:00, 12:00, 16:00, 20:00)
 - 🔄 **중복 방지**: 이미 사용한 키워드는 자동으로 제외
-- 🌐 **WordPress 자동 포스팅**: WordPress REST API를 통한 자동 게시 (NEW!)
-- 🏷️ **카테고리/태그 자동 관리**: "생활" 카테고리 및 태그 자동 생성 및 적용
+- 🏷️ **카테고리 세분화 분류**: 키워드 특성에 따른 14개 세부 카테고리 자동 분류 및 맞춤형 프롬프트 적용 (NEW!)
+- 🌐 **WordPress 자동 포스팅**: WordPress REST API를 통한 자동 게시 및 "이슈트래킹" 카테고리 통합 (UPDATED!)
 
 ## 📋 요구사항
 
@@ -94,13 +94,17 @@ python3 trend_blog_system.py
 WordPress에 자동으로 게시하려면:
 
 ```bash
+# 워드프레스 포스팅 활성화
+python3 wordpress_trend_blog.py --doPost
+
+# 테스트 실행 (파일만 생성, 포스팅 제외)
 python3 wordpress_trend_blog.py
 ```
 
 실행하면:
 1. 트렌드 키워드 수집 및 AI 콘텐츠 생성
-2. 로컬 파일로 저장
-3. **WordPress에 자동 포스팅** ("생활" 카테고리)
+2. 로컬 파일(`blog_posts/`)로 저장
+3. **`--doPost` 플래그 사용 시**: WordPress에 자동 포스팅 ("이슈트래킹" 카테고리)
 4. 태그 자동 생성 및 적용
 
 ### 생성된 파일 확인
@@ -198,15 +202,24 @@ python3 wordpress_trend_blog.py
 
 ### 주요 기능
 
-- ✅ **자동 카테고리 관리**: "생활" 카테고리 자동 생성
-- ✅ **태그 자동 적용**: Frontmatter에서 추출한 태그 자동 생성 및 적용
+- ✅ **세분화된 카테고리 분류**: `SPORTS_MATCH`, `STOCK`, `SOCIAL_ISSUE` 등 14개 세부 분류
+- ✅ **이슈트래킹 카테고리 통합**: 모든 게시글은 "이슈트래킹" 카테고리로 자동 분류 및 생성
 - ✅ **Markdown → HTML 변환**: WordPress 호환 HTML로 자동 변환
-- ✅ **이미지 포함**: 본문 이미지 자동 포함
-- ✅ **로컬 백업**: WordPress 포스팅과 별도로 로컬 파일 저장
+- ✅ **이미지 포함**: 본문 이미지 및 뉴스 이미지 자동 포함 (로컬 다운로드 후 삽입)
+- ✅ **로컬 백업**: WordPress 포스팅 여부와 관계없이 모든 글은 로컬에 Markdown으로 저장
+
+### 🗂️ 세부 카테고리 (14개)
+
+시스템은 키워드를 분석하여 다음 중 가장 적합한 카테고리로 분류합니다:
+- `SPORTS_MATCH` (경기 일정/결과), `SPORTS_GENERAL` (선수 이슈)
+- `STOCK` (개별 종목), `ECONOMY` (거시 경제/정책)
+- `SOCIAL_ISSUE` (논란/쟁점), `SOCIAL_INCIDENT` (사건/사고), `POLITICS` (정치)
+- `ENTERTAINMENT_NEWS` (가십), `ENTERTAINMENT_CONTENT` (방송/영화 리뷰)
+- `TECH_DEVICE` (하드웨어), `TECH_TREND` (서비스/AI)
+- `HEALTH` (건강), `LIVING_INFO` (생활 정보), `OTHER` (기타)
 
 ### 포스팅 결과 확인
-
-WordPress 관리자 페이지 → **글** → **모든 글**에서 확인 가능합니다.
+WordPress 관리자 페이지 → **글** → **모든 글**에서 확인 가능하며, 모든 글은 **"이슈트래킹"** 카테고리에 할당됩니다.
 
 ## 📊 로그 확인
 

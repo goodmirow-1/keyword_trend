@@ -320,79 +320,380 @@ class TrendBlogSystem:
         
         self._log("사용 가능한 새로운 키워드가 없습니다.")
         return None
+
+    def _analyze_keyword_category(self, keyword):
+        """
+        키워드 카테고리 분석 (Gemini 사용) - 세분화된 14개 카테고리
+        """
+        try:
+            prompt = f"""
+            다음 키워드를 분석하여 아래 세부 카테고리 중 하나로 분류하고, 글의 핵심 포커스를 한 문장으로 요약해줘.
+            
+            [키워드] : {keyword}
+            
+            [세부 카테고리]
+            1. SPORTS_MATCH (경기 일정, 결과, 중계 정보)
+            2. SPORTS_GENERAL (선수 이적, 부상, 팀 이슈, 일반 스포츠 뉴스)
+            3. STOCK (개별 주식 종목, 기업 실적, 공시)
+            4. ECONOMY (거시 경제, 부동산, 정책, 환율, 금리)
+            5. SOCIAL_ISSUE (사회적 논란, 쟁점, 찬반 토론)
+            6. SOCIAL_INCIDENT (사건, 사고, 재해, 팩트 중심)
+            7. POLITICS (정치, 선거, 정당, 법안)
+            8. ENTERTAINMENT_NEWS (연예인 가십, 열애, 사건, 근황)
+            9. ENTERTAINMENT_CONTENT (드라마, 영화, 웹툰, 방송 프로그램 리뷰/정보)
+            10. TECH_DEVICE (스마트폰, 가전, 하드웨어 스펙/비교)
+            11. TECH_TREND (IT 서비스, AI, 플랫폼, 소프트웨어 트렌드)
+            12. HEALTH (건강 정보, 질병, 운동, 의학)
+            13. LIVING_INFO (생활 꿀팁, 날씨, 여행, 요리, 쇼핑 정보)
+            14. OTHER (그 외 분류하기 어려운 일반 정보)
+            
+            [응답 형식]
+            Category: [카테고리명]
+            Focus: [핵심 포커스]
+            """
+            
+            response = self.model.generate_content(prompt)
+            result = response.text.strip()
+            
+            category = "OTHER"
+            focus = "정보 전달 및 개요 설명"
+            
+            for line in result.split('\n'):
+                if line.startswith('Category:'):
+                    category = line.replace('Category:', '').strip().upper()
+                elif line.startswith('Focus:'):
+                    focus = line.replace('Focus:', '').strip()
+            
+            # 유효한 카테고리인지 확인
+            valid_categories = [
+                'SPORTS_MATCH', 'SPORTS_GENERAL', 
+                'STOCK', 'ECONOMY', 
+                'SOCIAL_ISSUE', 'SOCIAL_INCIDENT', 'POLITICS',
+                'ENTERTAINMENT_NEWS', 'ENTERTAINMENT_CONTENT',
+                'TECH_DEVICE', 'TECH_TREND',
+                'HEALTH', 'LIVING_INFO', 'OTHER'
+            ]
+            
+            # 매칭되는 것이 없으면 유사한 것 찾거나 OTHER
+            if category not in valid_categories:
+                # 공백이나 특수문자 제거 후 비교 등 유연한 처리 가능하나 일단 OTHER
+                category = 'OTHER'
+                
+            self._log(f"키워드 분석 결과: {category} / {focus}")
+            return category, focus
+            
+        except Exception as e:
+            self._log(f"키워드 분석 실패: {e}")
+            return "OTHER", "정보 전달"
+
+    def _get_category_prompt(self, keyword, category, news_items_text, news_summary):
+        """
+        세분화된 카테고리별 맞춤 프롬프트 생성
+        """
+        base_instructions = f"""
+        이 글은 반드시 'front-matter + 본문'을 함께 생성해야 하며,
+        front-matter의 성격은 본문 내용과 정확히 일치해야 한다.
+        
+        [Front-matter 작성 규칙]
+        - title: '{keyword}' + (카테고리별 특성에 맞는 매력적인 제목)
+        - categories: 반드시 [정보, 분석, 후기] 등 적절한 것 선택 (트렌드 사용 금지)
+        - tags: ['{keyword}', 관련태그1, 관련태그2]
+        - description: 글의 핵심 내용을 요약한 메타 설명
+        
+        [공통 작성 원칙]
+        - 블로그 독자에게 친근하게 정보 전달 (해요체 추천하지만 너무 가볍지 않게)
+        - 가독성을 위해 적절한 소헤더와 불렛 포인트 사용
+        - '최신', '트렌드' 같은 단어 남발 금지
+        -Markdown 형식 준수
+        """
+
+        # 1. 스포츠 매치 (경기 중심)
+        if category == 'SPORTS_MATCH':
+            return f"""
+            '{keyword}'에 대한 스포츠 경기 프리뷰 또는 리뷰를 작성해줘.
+            
+            [상황 판단 (현재: {datetime.now().strftime('%Y-%m-%d')})]
+            뉴스 데이터를 바탕으로 경기가 '예정'인지 '종료'인지 파악하여 작성.
+            
+            A. 예정된 경기:
+               - 일정(한국 시간), 장소
+               - **중계 채널 및 시청 방법** (가장 중요하게 다룸)
+               - 양팀 전력/상대 전적/관전 포인트
+               
+            B. 종료된 경기:
+               - **스코어 및 경기 결과**
+               - 주요 하이라이트 장면 설명
+               - 승패 요인 분석 및 선수 활약상
+               - 다음 일정
+            
+            [참고 뉴스]
+            {news_summary}
+            
+            {base_instructions}
+            """
+            
+        # 2. 스포츠 일반 (선수, 팀)
+        elif category == 'SPORTS_GENERAL':
+            return f"""
+            '{keyword}'에 대한 스포츠 이슈/선수 정보를 작성해줘.
+            
+            [필수 포함 내용]
+            - 이슈의 핵심 내용 (이적, 부상, 기록 달성 등)
+            - 해당 선수의 최근 활약상 또는 팀 분위기
+            - 팬들의 반응 및 전문가 의견
+            - 향후 예상되는 시나리오
+            
+            [참고 뉴스]
+            {news_summary}
+            
+            {base_instructions}
+            """
+            
+        # 3. 주식 (개별 종목)
+        elif category == 'STOCK':
+            return f"""
+            '{keyword}' 주가 흐름 및 기업 이슈 분석 글을 작성해줘.
+            
+            [필수 포함 내용]
+            - 현재 주가 동향 및 최근 흐름
+            - **상승/하락의 구체적 원인** (호재/악재, 실적, 공시)
+            - 증권가 목표가 리포트 및 투자 의견 요약
+            - 향후 주가 전망 및 체크포인트
+            
+            * 주의: "무조건 사라/팔라"는 식의 조언 금지. 객관적 정보 위주.
+            
+            [참고 뉴스]
+            {news_summary}
+            
+            {base_instructions}
+            """
+            
+        # 4. 경제 (거시/부동산/정책)
+        elif category == 'ECONOMY':
+            return f"""
+            '{keyword}' 관련 경제/정책 이슈 해설 글을 작성해줘.
+            
+            [필수 포함 내용]
+            - 이슈 개요 및 배경 설명 (초보자도 이해하기 쉽게)
+            - 이것이 우리 삶/경제에 미치는 영향
+            - 찬반 의견이나 다양한 시각
+            - 요약 및 시사점
+            
+            [참고 뉴스]
+            {news_summary}
+            
+            {base_instructions}
+            """
+            
+        # 5. 사회 이슈 (논란/쟁점)
+        elif category == 'SOCIAL_ISSUE':
+            return f"""
+            '{keyword}' 관련 사회적 이슈/논란 정리 글을 작성해줘.
+            
+            [필수 포함 내용]
+            - 논란의 발단 및 핵심 쟁점
+            - 각계의 입장 (찬성 vs 반대, 혹은 A측 vs B측)
+            - 대중의 반응 (커뮤니티, 댓글 분위기 등)
+            - 시사하는 바 및 향후 전개 예상
+            
+            [참고 뉴스]
+            {news_summary}
+            
+            {base_instructions}
+            """
+
+        # 6. 사회 사건 (팩트 중심)
+        elif category == 'SOCIAL_INCIDENT':
+            return f"""
+            '{keyword}' 사건/사고 종합 정리 글을 작성해줘.
+            
+            [필수 포함 내용]
+            - 사건 발생 일시, 장소, 경위 (육하원칙)
+            - 현재까지의 수사/진행 상황
+            - 피해 규모 또는 사회적 파장
+            - 관련 주의사항 (유사 피해 방지 등)
+            
+            [참고 뉴스]
+            {news_summary}
+            
+            {base_instructions}
+            """
+
+        # 7. 정치
+        elif category == 'POLITICS':
+            return f"""
+            '{keyword}' 관련 정치 이슈 브리핑을 작성해줘.
+            
+            [필수 포함 내용]
+            - 이슈의 핵심 내용 및 팩트
+            - 여/야 혹은 관련 정치인들의 발언 및 입장 차이
+            - 이번 사안이 갖는 정치적 의미
+            - 향후 일정 및 예상 시나리오
+            
+            * 최대한 중립적이고 객관적인 톤 유지.
+            
+            [참고 뉴스]
+            {news_summary}
+            
+            {base_instructions}
+            """
+
+        # 8. 연예 뉴스 (가십/근황)
+        elif category == 'ENTERTAINMENT_NEWS':
+            return f"""
+            '{keyword}' 관련 연예계 소식을 정리해줘.
+            
+            [필수 포함 내용]
+            - 무슨 일이 있었는지 상세 내용 (기사 내용 기반)
+            - 소속사 공식 입장 혹은 본인 해명
+            - 네티즌/팬들의 반응
+            - 과거 유사 사례 혹은 배경 지식
+            
+            [참고 뉴스]
+            {news_summary}
+            
+            {base_instructions}
+            """
+
+        # 9. 연예 콘텐츠 (드라마/영화 리뷰)
+        elif category == 'ENTERTAINMENT_CONTENT':
+            return f"""
+            '{keyword}' (드라마/영화/방송) 프리뷰 또는 리뷰를 작성해줘.
+            
+            [필수 포함 내용]
+            - 기본 정보 (출연진, 줄거리, 방영시간/개봉일)
+            - 관전 포인트 혹은 감상 포인트 (재미 요소)
+            - 시청률/관객수 추이 및 반응
+            - (종영/결말인 경우) 결말 요약 및 해석
+            
+            [참고 뉴스]
+            {news_summary}
+            
+            {base_instructions}
+            """
+
+        # 10. 테크 기기 (하드웨어)
+        elif category == 'TECH_DEVICE':
+            return f"""
+            '{keyword}' 제품에 대한 스펙/정보 리뷰를 작성해줘.
+            
+            [필수 포함 내용]
+            - 주요 스펙 및 디자인 특징
+            - 전작 대비 달라진 점 (Upgrades)
+            - 장점 및 단점 (비판적 시각 포함)
+            - 출시일, 가격, 구매 정보
+            
+            [참고 뉴스]
+            {news_summary}
+            
+            {base_instructions}
+            """
+
+        # 11. 테크 트렌드 (IT/AI)
+        elif category == 'TECH_TREND':
+            return f"""
+            '{keyword}' 관련 IT/테크 트렌드 분석 글을 작성해줘.
+            
+            [필수 포함 내용]
+            - 기술/서비스의 개념 정의
+            - 최근 화제가 된 이유 (새로운 기능, 업데이트 등)
+            - 업계 동향 및 경쟁사 상황
+            - 향후 전망 및 사용자에게 미치는 영향
+            
+            [참고 뉴스]
+            {news_summary}
+            
+            {base_instructions}
+            """
+
+        # 12. 건강
+        elif category == 'HEALTH':
+            return f"""
+            '{keyword}' 관련 건강/의학 정보를 작성해줘.
+            
+            [필수 포함 내용]
+            - 증상 및 원인 설명
+            - 치료 방법 및 예방 수칙
+            - 좋은 음식/나쁜 음식 혹은 생활 습관
+            - 전문가 조언 (뉴스 기반)
+            
+            [참고 뉴스]
+            {news_summary}
+            
+            {base_instructions}
+            """
+
+        # 13. 생활 정보 (리빙)
+        elif category == 'LIVING_INFO':
+            return f"""
+            '{keyword}' 관련 생활 꿀팁/정보를 작성해줘.
+            
+            [필수 포함 내용]
+            - 이게 왜 필요한지/무엇인지 (관심 유발)
+            - 구체적인 정보 (날씨라면 예보, 축제라면 일정/장소, 요리라면 레시피)
+            - 이용 꿀팁 및 주의사항
+            - 요약
+            
+            [참고 뉴스]
+            {news_summary}
+            
+            {base_instructions}
+            """
+            
+        # 14. 기타 (OTHER)
+        else:
+            return f"""
+            '{keyword}'에 대해 정보를 찾는 사용자를 위한 친절한 설명 글을 작성해줘.
+            
+            [작성 포인트]
+            - '{keyword}'의 정의 및 핵심 개요
+            - 최근 이슈가 된 이유 (있다면)
+            - 사람들이 궁금해할 만한 3가지 포인트
+            - 결론 및 요약
+            
+            [참고 뉴스]
+            {news_summary}
+            
+            {base_instructions}
+            """
     
     def generate_blog_content(self, keyword):
         """
-        선택된 키워드로 SEO 최적화된 블로그 콘텐츠 생성
-        
-        Args:
-            keyword: 블로그 주제 키워드
-        
-        Returns:
-            str: 생성된 블로그 콘텐츠 (HTML 형식)
+        선택된 키워드로 카테고리별 맞춤 블로그 콘텐츠 생성
         """
         if not self.client_ready:
-            return f"<h1>{keyword}에 대한 블로그 포스트</h1>\n\n<p>(API 키가 설정되지 않아 실제 콘텐츠를 생성할 수 없습니다)</p>"
+            return f"<h1>{keyword}에 대한 블로그 포스트</h1><p>(API 키 설정 필요)</p>"
         
         try:
-            self._log(f"'{keyword}' 키워드로 블로그 콘텐츠 생성 중...")
+            self._log(f"'{keyword}' 키워드로 블로그 콘텐츠 생성 시작...")
             
             # 1. Google 뉴스 가져오기
-            news_items = self.fetch_google_news(keyword, max_news=3)
+            news_items = self.fetch_google_news(keyword, max_news=5)
             
-            # 2. Google 이미지 가져오기
+            # 뉴스 요약 텍스트 생성 (프롬프트 참고용)
+            news_summary = ""
+            if news_items:
+                for idx, item in enumerate(news_items):
+                    news_summary += f"{idx+1}. {item['title']} ({item.get('source', '')}): {item['summary']}\n"
+            else:
+                news_summary = "관련된 구체적인 뉴스 기사가 없습니다. 일반적인 정보에 기반해 작성해주세요."
+
+            # 2. 키워드 카테고리 분석
+            category, category_focus = self._analyze_keyword_category(keyword)
+            
+            # 3. Google 이미지 가져오기
             featured_image = self.fetch_google_image(keyword)
             
-            # 3. AI로 본문 생성
-            prompt = f"""
-'{keyword}'에 대해 정보 탐색을 하는 사용자는
-뉴스나 트렌드 요약이 아니라,
-판단 기준과 구조를 이해하기 위한 개요 정보를 원한다.
-
-이 글은 반드시 'front-matter + 본문'을 함께 생성해야 하며,
-front-matter의 성격은 본문 내용과 정확히 일치해야 한다.
-
-[Front-matter 작성 규칙]
-- title: '{keyword}' + 판단/구조/기준/분석 중 하나를 포함한 정보형 제목
-- categories: 반드시 [정보, 분석] 중에서만 선택 (트렌드 사용 금지)
-- tags: ['{keyword}', 판단기준, 구조분석] 형태로 구성
-- description: '{keyword}'에 대해 판단 기준과 한계를 정리한 정보성 분석 글
-- '최신', '트렌드', '뉴스' 단어 사용 금지
-
-[글의 목적]
-- '{keyword}'를 처음 접하는 사람이
-  이 개념이나 대상을 어떻게 바라봐야 할지
-  판단 기준을 제공하는 정보성 콘텐츠 작성
-
-[작성 원칙]
-- 홍보, 마케팅, 뉴스 요약처럼 보이지 않게 작성
-- 개인 경험, 시점 특정(최근, 요즘 등) 표현 사용 금지
-- 일반적인 판단 기준 → 특징 → 한계 구조 유지
-
-[필수 구성]
-1. 서론: 사람들이 '{keyword}'를 검색하는 이유 요약
-2. 본문 1: 이 주제를 판단할 때 자주 사용되는 기준 2~3가지
-3. 본문 2: 해당 기준에서 본 '{keyword}'의 특징
-4. 본문 3: 상황이나 조건에 따라 달라질 수 있는 한계나 주의점
-5. 결론: 어떤 경우에 참고하면 적합한 정보인지 명확히 정리
-
-[결론 필수 문장]
-- "이 정보는 '{keyword}'를 처음 접하거나,
-   개요 수준에서 판단 기준이 필요한 경우에 참고하기 적합하다."
-
-[형식]
-- Markdown
-- front-matter는 YAML 형식으로 본문 최상단에 작성
-- 전체 분량 900~1200자
-
-위 기준을 어기지 말고 front-matter와 본문을 함께 작성하라.
-"""
-
+            # 4. 맞춤형 프롬프트 생성
+            prompt = self._get_category_prompt(keyword, category, news_items, news_summary)
             
+            self._log(f"Gemini 콘텐츠 생성 중... (Category: {category})")
+            
+            # 5. AI 생성
             response = self.model.generate_content(prompt)
             main_content = response.text
             
-            # 4. Markdown 콘텐츠 생성 (Frontmatter 포함)
+            # 6. Markdown 콘텐츠 조립
             markdown_content = self._build_markdown_content(keyword, main_content, news_items, featured_image)
             
             self._log("블로그 콘텐츠 생성 완료")
@@ -400,6 +701,8 @@ front-matter의 성격은 본문 내용과 정확히 일치해야 한다.
         
         except Exception as e:
             self._log(f"콘텐츠 생성 오류: {e}")
+            import traceback
+            self._log(traceback.format_exc())
             return None
     
     def download_image(self, image_url, keyword, index=0):
