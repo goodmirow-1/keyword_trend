@@ -84,10 +84,37 @@ else:
 if menu == "Dashboard":
     st.title("🚀 System Overview")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
-    # 1. 최신 키워드 현황
+    # 0. 스마트 작업 실행
     with col1:
+        st.markdown('<div class="status-card">', unsafe_allow_html=True)
+        st.subheader("💡 Smart Actions")
+        if st.button("🚀 Run: Write Next Trend"):
+            with st.spinner("Finding next unused trend & writing..."):
+                # run_blog_creation logic inside dashboard
+                all_keywords = trend_sys.get_trending_keywords()
+                selected_kw = trend_sys.select_keyword(all_keywords)
+                
+                if selected_kw:
+                    content = wp_sys.generate_blog_content(selected_kw)
+                    if content:
+                        filepath = wp_sys.save_blog_post(selected_kw, content)
+                        st.success(f"Generated: {selected_kw}")
+                        # 워드프레스 설정이 있으면 자동 포스팅 시도
+                        if wp_sys.wp_url:
+                            title = wp_sys.extract_title_from_markdown(content)
+                            tags = wp_sys.extract_tags_from_markdown(content) or [selected_kw]
+                            wp_sys.post_to_wordpress(title, content, tags)
+                            st.balloons()
+                            st.success("And posted to WordPress!")
+                        st.session_state.selected_preview = os.path.basename(filepath)
+                else:
+                    st.warning("No unused trends found currently.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # 1. 최신 키워드 현황
+    with col2:
         st.markdown('<div class="status-card">', unsafe_allow_html=True)
         st.subheader("📈 Trending Discovery")
         if st.button("Refresh Keywords"):
@@ -105,7 +132,7 @@ if menu == "Dashboard":
         st.markdown('</div>', unsafe_allow_html=True)
 
     # 2. 최근 생성된 글
-    with col2:
+    with col3:
         st.markdown('<div class="status-card">', unsafe_allow_html=True)
         st.subheader("📝 Recent Posts")
         posts = sorted([f for f in os.listdir(trend_sys.blog_posts_dir) if f.endswith('.md')], reverse=True)
@@ -149,7 +176,7 @@ if menu == "Dashboard":
             st.error("File not found.")
 
     # 3. 시스템 상태
-    with col3:
+    with col4:
         st.markdown('<div class="status-card">', unsafe_allow_html=True)
         st.subheader("⚙️ System Status")
         st.write(f"**API Ready**: {'✅' if trend_sys.client_ready else '❌'}")
@@ -180,24 +207,24 @@ elif menu == "Keyword Generator":
                     st.error(f"'{selected_kw}'은(는) 이미 작성된 키워드입니다.")
                 else:
                     with st.spinner(f"Creating blog for '{selected_kw}'..."):
-                    # WordPress 시스템의 run_blog_creation을 활용하되, 특정 키워드만 처리하도록 로직이 필요함
-                    # 여기서는 직접 메서드들을 호출
-                    content = wp_sys.generate_blog_content(selected_kw)
-                    if content:
-                        filepath = wp_sys.save_blog_post(selected_kw, content)
-                        st.success(f"Blog saved to {filepath}")
-                        if do_post:
-                            title = wp_sys.extract_title_from_markdown(content)
-                            tags = wp_sys.extract_tags_from_markdown(content) or [selected_kw]
-                            success = wp_sys.post_to_wordpress(title, content, tags)
-                            if success:
-                                st.balloons()
-                                st.success("Successfully posted to WordPress!")
-                                if st.button("View Generated Post"):
-                                    st.session_state.selected_preview = os.path.basename(filepath)
-                                    st.rerun()
-                    else:
-                        st.error("Failed to generate content.")
+                        # WordPress 시스템의 run_blog_creation을 활용하되, 특정 키워드만 처리하도록 로직이 필요함
+                        # 여기서는 직접 메서드들을 호출
+                        content = wp_sys.generate_blog_content(selected_kw)
+                        if content:
+                            filepath = wp_sys.save_blog_post(selected_kw, content)
+                            st.success(f"Blog saved to {filepath}")
+                            if do_post:
+                                title = wp_sys.extract_title_from_markdown(content)
+                                tags = wp_sys.extract_tags_from_markdown(content) or [selected_kw]
+                                success = wp_sys.post_to_wordpress(title, content, tags)
+                                if success:
+                                    st.balloons()
+                                    st.success("Successfully posted to WordPress!")
+                                    if st.button("View Generated Post"):
+                                        st.session_state.selected_preview = os.path.basename(filepath)
+                                        st.rerun()
+                        else:
+                            st.error("Failed to generate content.")
         else:
             st.info("Fetch trends first.")
 
@@ -209,15 +236,15 @@ elif menu == "Keyword Generator":
                 st.error(f"'{manual_kw}'은(는) 이미 작성된 키워드입니다.")
             else:
                 with st.spinner(f"Creating blog for '{manual_kw}'..."):
-                content = wp_sys.generate_blog_content(manual_kw)
-                if content:
-                    filepath = wp_sys.save_blog_post(manual_kw, content)
-                    st.success("Blog generated successfully.")
-                    if st.button("View Generated Post", key="view_manual"):
-                        st.session_state.selected_preview = os.path.basename(filepath)
-                        st.rerun()
-                else:
-                    st.error("Failed to generate content.")
+                    content = wp_sys.generate_blog_content(manual_kw)
+                    if content:
+                        filepath = wp_sys.save_blog_post(manual_kw, content)
+                        st.success("Blog generated successfully.")
+                        if st.button("View Generated Post", key="view_manual"):
+                            st.session_state.selected_preview = os.path.basename(filepath)
+                            st.rerun()
+                    else:
+                        st.error("Failed to generate content.")
 
 elif menu == "Post Management":
     st.title("📁 Post Management")
