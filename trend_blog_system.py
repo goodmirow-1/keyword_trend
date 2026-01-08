@@ -85,7 +85,7 @@ class TrendBlogSystem:
                     page = browser.new_page()
                     
                     # Google Trends 페이지 접속
-                    page.goto('https://trends.google.co.kr/trending?geo=KR&hours=4', timeout=30000)
+                    page.goto('https://trends.google.co.kr/trending?geo=KR&hours=24', timeout=30000)
                     
                     # 페이지 로딩 대기
                     page.wait_for_selector('tr[role="row"]', timeout=10000)
