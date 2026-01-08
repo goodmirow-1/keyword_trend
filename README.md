@@ -14,8 +14,10 @@ Google Trends에서 실시간 인기 키워드를 추출하여 AI가 자동으�
 - 📱 **반응형 디자인**: 모바일/태블릿/데스크톱 완벽 대응
 - ⏰ **자동 스케줄링**: 매일 정해진 시간에 자동 실행 (08:00, 12:00, 16:00, 20:00)
 - 🔄 **중복 방지**: 이미 사용한 키워드는 자동으로 제외
-- 🏷️ **카테고리 세분화 분류**: 키워드 특성에 따른 14개 세부 카테고리 자동 분류 및 맞춤형 프롬프트 적용 (NEW!)
-- 🌐 **WordPress 자동 포스팅**: WordPress REST API를 통한 자동 게시 및 "이슈트래킹" 카테고리 통합 (UPDATED!)
+- 🏷️ **카테고리 세분화 분류**: 키워드 특성에 따른 14개 세부 카테고리 자동 분류 및 맞춤형 프롬프트 적용
+- 🌐 **WordPress 자동 포스팅**: WordPress REST API를 통한 자동 게시 및 "이슈트래킹" 카테고리 통합
+- 🎭 **블로그 페르소나 설정**: `friendly`, `professional`, `analytical` 등 원하는 말투 설정 가능 (NEW!)
+- ✅ **팩트 체크 및 정보 통합**: 여러 뉴스 소스를 교차 검증하여 신뢰도 높은 콘텐츠 생성 (NEW!)
 
 ## 📋 요구사항
 
@@ -69,6 +71,10 @@ GEMINI_API_KEY=your_gemini_api_key_here
 WORDPRESS_URL=https://your-wordpress-site.com
 WORDPRESS_USERNAME=your_username
 WORDPRESS_APP_PASSWORD=your_application_password
+
+# 블로그 페르소나 설정 (선택사항)
+# friendly (기본), professional, analytical 중 선택
+BLOG_PERSONA=friendly
 ```
 
 **Gemini API Key 발급 방법:**

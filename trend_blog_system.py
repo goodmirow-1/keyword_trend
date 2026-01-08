@@ -31,6 +31,10 @@ class TrendBlogSystem:
             self.client_ready = False
             print("경고: GEMINI_API_KEY 또는 GOOGLE_API_KEY 환경변수가 설정되지 않았습니다.")
             
+        # 블로그 페르소나 설정 (friendly, professional, analytical)
+        self.persona = os.getenv('BLOG_PERSONA', 'friendly').lower()
+        self._log(f"블로그 페르소나 설정: {self.persona}")
+            
         # 초기화: 디렉토리 및 파일 생성
         if not os.path.exists(self.blog_posts_dir):
             os.makedirs(self.blog_posts_dir)
@@ -386,13 +390,52 @@ class TrendBlogSystem:
             self._log(f"키워드 분석 실패: {e}")
             return "OTHER", "정보 전달"
 
+    def _get_persona_instruction(self):
+        """
+        설정된 페르소나에 따른 글쓰기 지침 반환
+        """
+        if self.persona == 'professional':
+            return """
+            [Persona: Professional (전문가형)]
+            - 말투: 신뢰감 있고 깔끔한 '하십시오체' 또는 단정한 '해요체'를 사용하십시오.
+            - 어조: 객관적이고 권위 있는 정보를 전달하는 전문가의 목소리를 유지하십시오.
+            - 특징: 불필요한 수식어를 줄이고, 정확한 용어와 논리적인 구조로 독자의 이해를 돕습니다.
+            """
+        elif self.persona == 'analytical':
+            return """
+            [Persona: Analytical (분석가형)]
+            - 말투: 논리적이고 객관적인 어조를 사용하십시오. (~입니다, ~함)
+            - 어조: 현상의 이면을 분석하고 데이터나 근거를 바탕으로 다각도의 시각을 제공하십시오.
+            - 특징: 단순 정보 전달을 넘어 '왜' 이런 일이 일어났는지, 앞으로 어떤 영향을 미칠지에 집중합니다.
+            """
+        else:  # friendly (default)
+            return """
+            [Persona: Friendly (친근한 이웃형)]
+            - 말투: 다정하고 친근한 '해요체'를 사용하세요. 가끔 이모지(😊, ✨ 등)를 적절히 섞어주세요.
+            - 어조: 친구에게 이야기하듯 편안하면서도 유익한 정보를 전달하는 따뜻한 목소리입니다.
+            - 특징: 독자의 공감을 이끌어내는 문구(예: "여러분도 궁금하셨죠?", "정말 놀랍지 않나요?")를 포함합니다.
+            """
+
     def _get_category_prompt(self, keyword, category, news_items_text, news_summary):
         """
-        세분화된 카테고리별 맞춤 프롬프트 생성
+        세분화된 카테고리별 맞춤 프롬프트 생성 (페르소나 및 팩트체크 포함)
         """
+        persona_instruction = self._get_persona_instruction()
+        
+        fact_check_instruction = """
+        [Fact-Check 및 정보 통합 지침]
+        - 제공된 여러 뉴스 항목({len(news_items_text)}개)을 면밀히 비교하여 공통된 핵심 사실을 추출하십시오.
+        - 뉴스 간에 내용이 상충되는 경우, 가장 최신의 정보이거나 더 구체적인 보도를 우선시하되, 불확실한 부분은 '~라고 전해졌습니다'와 같은 신중한 표현을 사용하십시오.
+        - 단순히 기사를 나열하지 말고, 전체적인 맥락을 파악하여 하나의 완성된 스토리로 재구성하십시오.
+        """
+
         base_instructions = f"""
         이 글은 반드시 'front-matter + 본문'을 함께 생성해야 하며,
         front-matter의 성격은 본문 내용과 정확히 일치해야 한다.
+        
+        {persona_instruction}
+        
+        {fact_check_instruction}
         
         [Front-matter 작성 규칙]
         - title: '{keyword}' + (카테고리별 특성에 맞는 매력적인 제목)
@@ -401,10 +444,9 @@ class TrendBlogSystem:
         - description: 글의 핵심 내용을 요약한 메타 설명
         
         [공통 작성 원칙]
-        - 블로그 독자에게 친근하게 정보 전달 (해요체 추천하지만 너무 가볍지 않게)
         - 가독성을 위해 적절한 소헤더와 불렛 포인트 사용
         - '최신', '트렌드' 같은 단어 남발 금지
-        -Markdown 형식 준수
+        - Markdown 형식 준수
         """
 
         # 1. 스포츠 매치 (경기 중심)
