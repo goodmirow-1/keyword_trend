@@ -92,7 +92,9 @@ if menu == "Dashboard":
         st.subheader("📈 Trending Discovery")
         if st.button("Refresh Keywords"):
             with st.spinner("Fetching Google Trends..."):
-                st.session_state.keywords = trend_sys.get_trending_keywords()
+                all_keywords = trend_sys.get_trending_keywords()
+                used_keywords = trend_sys._load_used_keywords()
+                st.session_state.keywords = [kw for kw in all_keywords if kw not in used_keywords]
         
         keywords = st.session_state.get('keywords', [])
         if keywords:
@@ -131,7 +133,9 @@ elif menu == "Keyword Generator":
     
     with tab1:
         if st.button("Fetch Current Trends"):
-            st.session_state.keywords = trend_sys.get_trending_keywords()
+            all_keywords = trend_sys.get_trending_keywords()
+            used_keywords = trend_sys._load_used_keywords()
+            st.session_state.keywords = [kw for kw in all_keywords if kw not in used_keywords]
             
         keywords = st.session_state.get('keywords', [])
         if keywords:
@@ -139,7 +143,11 @@ elif menu == "Keyword Generator":
             do_post = st.checkbox("Post to WordPress immediately?", value=True)
             
             if st.button("Generate & Publish"):
-                with st.spinner(f"Creating blog for '{selected_kw}'..."):
+                used_keywords = wp_sys._load_used_keywords()
+                if selected_kw in used_keywords:
+                    st.error(f"'{selected_kw}'은(는) 이미 작성된 키워드입니다.")
+                else:
+                    with st.spinner(f"Creating blog for '{selected_kw}'..."):
                     # WordPress 시스템의 run_blog_creation을 활용하되, 특정 키워드만 처리하도록 로직이 필요함
                     # 여기서는 직접 메서드들을 호출
                     content = wp_sys.generate_blog_content(selected_kw)
@@ -161,7 +169,11 @@ elif menu == "Keyword Generator":
     with tab2:
         manual_kw = st.text_input("Enter a specific keyword:")
         if st.button("Generate Manual Post") and manual_kw:
-            with st.spinner(f"Creating blog for '{manual_kw}'..."):
+            used_keywords = wp_sys._load_used_keywords()
+            if manual_kw in used_keywords:
+                st.error(f"'{manual_kw}'은(는) 이미 작성된 키워드입니다.")
+            else:
+                with st.spinner(f"Creating blog for '{manual_kw}'..."):
                 content = wp_sys.generate_blog_content(manual_kw)
                 if content:
                     wp_sys.save_blog_post(manual_kw, content)
@@ -212,8 +224,8 @@ elif menu == "System Logs":
             logs = f.readlines()
         
         # 마지막 100줄만 표시
-        log_text = "".join(logs[-100:])
-        st.markdown(f'<div class="log-container">{log_text.replace("\\n", "<br>")}</div>', unsafe_allow_html=True)
+        log_text = "".join(logs[-100:]).replace("\n", "<br>")
+        st.markdown(f'<div class="log-container">{log_text}</div>', unsafe_allow_html=True)
         
         if st.button("Clear Logs"):
             with open(trend_sys.log_file, 'w', encoding='utf-8') as f:

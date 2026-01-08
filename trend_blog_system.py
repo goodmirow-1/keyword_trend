@@ -1069,10 +1069,11 @@ class TrendBlogSystem:
             
             self._log(f"블로그 포스트 저장 완료: {filepath}")
             
-            # 사용된 키워드 목록에 추가
+            # 사용된 키워드 목록에 추가 (중복 방지)
             used_keywords = self._load_used_keywords()
-            used_keywords.append(keyword)
-            self._save_used_keywords(used_keywords)
+            if keyword not in used_keywords:
+                used_keywords.append(keyword)
+                self._save_used_keywords(used_keywords)
             
             return filepath
         
