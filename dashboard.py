@@ -71,7 +71,7 @@ trend_sys, wp_sys = get_systems()
 # 사이드바
 st.sidebar.title("🔥 Trend Blog Admin")
 st.sidebar.markdown("---")
-menu = st.sidebar.radio("Menu", ["Dashboard", "Keyword Generator", "Post Management", "System Logs"])
+menu = st.sidebar.radio("Menu", ["Dashboard", "Keyword Generator", "Post Management", "Used Keywords", "System Logs"])
 
 st.sidebar.markdown("---")
 st.sidebar.info(f"**Persona**: {trend_sys.persona.capitalize()}")
@@ -285,6 +285,36 @@ elif menu == "Post Management":
                 os.remove(filepath)
                 st.warning("File deleted.")
                 st.rerun()
+
+elif menu == "Used Keywords":
+    st.title("📚 Used Keywords Management")
+    st.write("이미 사용된 키워드 목록을 확인하고 관리합니다.")
+    
+    used_keywords = trend_sys._load_used_keywords()
+    
+    if not used_keywords:
+        st.info("No used keywords yet.")
+    else:
+        # 키워드 데이터프레임으로 표시
+        df = pd.DataFrame(used_keywords, columns=["Keyword"])
+        df = df.iloc[::-1] # 최신순
+        
+        st.markdown(f"**Total Used Keywords**: {len(used_keywords)}")
+        
+        # 삭제 기능을 위한 멀티셀렉트
+        to_delete = st.multiselect("Select keywords to delete:", used_keywords)
+        
+        if st.button("Delete Selected Keywords"):
+            if to_delete:
+                new_list = [kw for kw in used_keywords if kw not in to_delete]
+                trend_sys._save_used_keywords(new_list)
+                st.success(f"{len(to_delete)} keywords deleted.")
+                st.rerun()
+            else:
+                st.warning("Please select keywords to delete.")
+        
+        st.markdown("---")
+        st.table(df)
 
 elif menu == "System Logs":
     st.title("🪵 System Logs")
