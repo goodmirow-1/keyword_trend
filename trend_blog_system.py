@@ -13,6 +13,7 @@ class TrendBlogSystem:
         """
         self.pytrends = TrendReq(hl='ko', tz=540)  # 한국어, 한국 시간대
         self.used_keywords_file = 'used_keywords.json'
+        self.config_file = 'system_config.json'
         self.blog_posts_dir = 'blog_posts'
         self.log_file = 'system_log.txt'
         
@@ -47,6 +48,9 @@ class TrendBlogSystem:
             
         if not os.path.exists(self.used_keywords_file):
             self._save_used_keywords([])
+            
+        # 설정 로드
+        self.config = self._load_config()
 
     def _log(self, message):
         """로그 메시지 기록"""
@@ -94,6 +98,30 @@ class TrendBlogSystem:
                 json.dump(keywords, f, ensure_ascii=False, indent=2)
         except Exception as e:
             self._log(f"키워드 파일 저장 오류: {e}")
+
+    def _load_config(self):
+        """시스템 설정 불러오기"""
+        default_config = {
+            "publication_times": ["08:00", "12:00", "16:00", "20:00"]
+        }
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            else:
+                self._save_config(default_config)
+                return default_config
+        except Exception as e:
+            self._log(f"설정 파일 로드 오류: {e}")
+            return default_config
+
+    def _save_config(self, config):
+        """시스템 설정 저장"""
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            self._log(f"설정 파일 저장 오류: {e}")
     
     def get_trending_keywords(self, region='south_korea'):
         """
@@ -1282,18 +1310,22 @@ def main():
     """
     system = TrendBlogSystem()
     
-    # 스케줄 설정: 오전 8시부터 4시간 간격
-    schedule.every().day.at("08:00").do(system.run_blog_creation)
-    schedule.every().day.at("12:00").do(system.run_blog_creation)
-    schedule.every().day.at("16:00").do(system.run_blog_creation)
-    schedule.every().day.at("20:00").do(system.run_blog_creation)
+    # 설정에서 발행 시간 가져오기
+    publication_times = system.config.get('publication_times', ["08:00", "12:00", "16:00", "20:00"])
+    
+    # 스케줄 설정
+    for t in publication_times:
+        try:
+            schedule.every().day.at(t).do(system.run_blog_creation)
+        except Exception as e:
+            print(f"스케줄 설정 오류 ({t}): {e}")
     
     print("블로그 자동 작성 시스템 시작")
-    print("스케줄: 08:00, 12:00, 16:00, 20:00")
+    print(f"스케줄: {', '.join(publication_times)}")
     print("중지하려면 Ctrl+C를 누르세요.")
     
     # 즉시 한 번 실행 (테스트용)
-    system.run_blog_creation()
+    # system.run_blog_creation()
     
     # 스케줄 루프 실행
     while True:
