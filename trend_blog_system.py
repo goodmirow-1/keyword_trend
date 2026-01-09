@@ -290,6 +290,64 @@ class TrendBlogSystem:
         
         return []
     
+    def fetch_ai_image(self, keyword):
+        """
+        Gemini Imagen 3를 사용하여 AI 이미지 생성
+        """
+        try:
+            self._log(f"'{keyword}' 관련 AI 이미지 생성 시도 중...")
+            import os
+            import requests
+            from datetime import datetime
+            api_key = os.getenv('GEMINI_API_KEY')
+            if not api_key:
+                self._log("GEMINI_API_KEY 환경 변수가 설정되지 않았습니다. AI 이미지 생성을 건너뜁니다.")
+                return None
+                
+            # Imagen 4.0 API 호출 (REST)
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key={api_key}"
+            
+            # 보다 구체적인 이미지 생성을 위한 프롬프트 가공
+            prompt = f"A professional, photorealistic blog header image for the topic: '{keyword}'. High quality, centered composition, no text."
+            
+            data = {
+                "instances": [{"prompt": prompt}],
+                "parameters": {"sampleCount": 1}
+            }
+            
+            response = requests.post(url, json=data, timeout=30)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if "predictions" in result and len(result["predictions"]) > 0:
+                    # 응답은 보통 base64 인코딩된 이미지 데이터
+                    b64_data = result["predictions"][0].get("bytesBase64Encoded")
+                    if b64_data:
+                        import base64
+                        image_data = base64.b64decode(b64_data)
+                        
+                        # 로컬 저장
+                        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                        filename = f"ai_featured_{timestamp}.png"
+                        filepath = os.path.join(self.blog_posts_dir, 'images', filename)
+                        
+                        if not os.path.exists(os.path.join(self.blog_posts_dir, 'images')):
+                            os.makedirs(os.path.join(self.blog_posts_dir, 'images'))
+                            
+                        with open(filepath, 'wb') as f:
+                            f.write(image_data)
+                            
+                        self._log(f"AI 이미지 생성 및 저장 완료: {filepath}")
+                        # 프론트엔드에서 참조 가능하도록 상대 경로 반환
+                        return f"images/{filename}"
+            
+            # 실패 시 로그 남기고 None 반환 (자동으로 기존 구글 이미지 fetch로 넘어감)
+            self._log(f"AI 이미지 생성 실패 (HTTP {response.status_code}): {response.text[:100]}")
+            return None
+        except Exception as e:
+            self._log(f"AI 이미지 생성 중 오류: {e}")
+            return None
+
     def fetch_google_image(self, keyword):
         """
         Google 이미지 검색에서 첫 번째 이미지 URL 가져오기
@@ -330,7 +388,66 @@ class TrendBlogSystem:
         except Exception as e:
             self._log(f"Google 이미지 가져오기 실패: {e}")
         
-        return None
+    def fetch_youtube_video(self, keyword):
+        """
+        YouTube에서 관련 인기 영상의 임베딩 코드 가져오기
+        """
+        try:
+            self._log(f"'{keyword}' 관련 YouTube 영상 검색 중...")
+            import requests
+            import re
+            search_query = f"{keyword} 최신 뉴스"
+            url = f"https://www.youtube.com/results?search_query={search_query}"
+            headers = {"User-Agent": "Mozilla/5.0"}
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                # videoId 추출 (watch?v=...)
+                video_ids = re.findall(r"\"videoId\":\"([^\"]+)\"", response.text)
+                if video_ids:
+                    # 첫 번째 영상 사용
+                    video_id = video_ids[0]
+                    self._log(f"YouTube 영상 발견: https://youtu.be/{video_id}")
+                    return f'<iframe width="100%" height="450" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'
+            return None
+        except Exception as e:
+            self._log(f"YouTube 영상 검색 실패: {e}")
+            return None
+
+    def get_related_posts(self, current_keyword):
+        """
+        기존 게시물 중 현재 키워드와 연관성 높은 2개 선정
+        """
+        try:
+            if not os.path.exists(self.blog_posts_dir):
+                return []
+                
+            all_files = [f for f in os.listdir(self.blog_posts_dir) if f.endswith('.md')]
+            if not all_files:
+                return []
+            
+            # 현재 키워드 제외
+            other_files = [f for f in all_files if current_keyword not in f]
+            if not other_files:
+                return []
+            
+            # 간단하게 최근 게시물 2개 반환
+            other_files.sort(reverse=True)
+            related = []
+            for f in other_files[:2]:
+                # 파일명에서 키워드 추출 (timestamp_keyword.md)
+                parts = f.replace('.md', '').split('_')
+                if len(parts) >= 3:
+                    title = " ".join(parts[2:]) # 언더스코어가 더 있을 수 있으므로
+                    related.append({'title': title, 'filename': f})
+                else:
+                    # 형식이 다르면 그냥 파일명 사용
+                    related.append({'title': f.replace('.md', ''), 'filename': f})
+            return related
+        except Exception as e:
+            self._log(f"관련 게시물 검색 실패: {e}")
+            return []
+            
     
     def select_keyword(self, keywords):
         """
@@ -750,8 +867,11 @@ class TrendBlogSystem:
             # 2. 키워드 카테고리 분석
             category, category_focus = self._analyze_keyword_category(keyword)
             
-            # 3. Google 이미지 가져오기
-            featured_image = self.fetch_google_image(keyword)
+            # 3. 이미지 가져오기 (AI 우선, 실패 시 Google)
+            featured_image = self.fetch_ai_image(keyword)
+            if not featured_image:
+                self._log("AI 이미지 생성 실패 또는 권한 없음. Google 이미지를 사용합니다.")
+                featured_image = self.fetch_google_image(keyword)
             
             # 4. 맞춤형 프롬프트 생성
             prompt = self._get_category_prompt(keyword, category, news_items, news_summary)
@@ -762,8 +882,15 @@ class TrendBlogSystem:
             response = self.model.generate_content(prompt)
             main_content = response.text
             
-            # 6. Markdown 콘텐츠 조립
-            markdown_content = self._build_markdown_content(keyword, main_content, news_items, featured_image)
+            # 6. 추가 콘텐츠 fetching
+            youtube_embed = self.fetch_youtube_video(keyword)
+            related_posts = self.get_related_posts(keyword)
+            
+            # 7. Markdown 콘텐츠 조립
+            markdown_content = self._build_markdown_content(
+                keyword, main_content, news_items, featured_image, 
+                youtube_embed=youtube_embed, related_posts=related_posts
+            )
             
             self._log("블로그 콘텐츠 생성 완료")
             return markdown_content
@@ -816,14 +943,18 @@ class TrendBlogSystem:
         
         return image_url  # 실패 시 원본 URL 반환
     
-    def _build_markdown_content(self, keyword, main_content, news_items, featured_image):
+    def _build_markdown_content(self, keyword, main_content, news_items, featured_image, youtube_embed=None, related_posts=None):
         """
         Markdown 콘텐츠 생성 (Frontmatter 포함)
         """
-        # 대표 이미지 다운로드
+        # 대표 이미지 처리
         local_featured_image = None
         if featured_image:
-            local_featured_image = self.download_image(featured_image, keyword, 'featured')
+            if featured_image.startswith('http'):
+                local_featured_image = self.download_image(featured_image, keyword, 'featured')
+            else:
+                # 이미 로컬 경로인 경우 (AI 생성 등)
+                local_featured_image = featured_image
         
         # 날짜 생성
         today = datetime.now().strftime('%Y-%m-%d')
@@ -857,6 +988,11 @@ class TrendBlogSystem:
                 markdown += f"![{keyword}]({local_featured_image})\n\n"
             markdown += f"{main_content}\n\n"
         
+        # YouTube 섹션 추가
+        if youtube_embed:
+            markdown += "## 🎬 관련 영상\n\n"
+            markdown += f"{youtube_embed}\n\n"
+            
         # 뉴스 섹션 추가
         if news_items:
             markdown += "## 📰 관련 뉴스\n\n"
@@ -872,6 +1008,13 @@ class TrendBlogSystem:
                     markdown += f"![뉴스 이미지]({news_image})\n"
                 markdown += f"> {news['summary'][:150]}...\n\n"
                 
+        # 내부 링크 섹션 추가
+        if related_posts:
+            markdown += "## 🔗 함께 보면 좋은 글\n\n"
+            for post in related_posts:
+                markdown += f"* [{post['title']}](file://{post['filename']})\n"
+            markdown += "\n"
+            
         return markdown
         
         # 전체 HTML 문서
