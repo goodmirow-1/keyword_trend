@@ -402,12 +402,20 @@ class TrendBlogSystem:
             response = requests.get(url, headers=headers, timeout=10)
             
             if response.status_code == 200:
-                # videoId 추출 (watch?v=...)
+                # 비디오 목록에서 실제 검색 결과 비디오 ID만 추출하기 위해 "videoRenderer" 패턴 사용
+                # 이는 유튜브 검색 결과 페이지의 JSON 데이터 구조에서 비디오 항목을 식별하는 키워드입니다.
+                results = re.findall(r"\"videoRenderer\":\{\"videoId\":\"([^\"]+)\"", response.text)
+                if results:
+                    # 첫 번째 검색 결과 사용
+                    video_id = results[0]
+                    self._log(f"유튜브 영상 발견: https://youtu.be/{video_id}")
+                    return f'<iframe width="100%" height="450" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'
+                
+                # 차선책: 기존의 단순 videoId 추출 (최신 데이터 구조 대응)
                 video_ids = re.findall(r"\"videoId\":\"([^\"]+)\"", response.text)
                 if video_ids:
-                    # 첫 번째 영상 사용
                     video_id = video_ids[0]
-                    self._log(f"YouTube 영상 발견: https://youtu.be/{video_id}")
+                    self._log(f"유튜브 영상 발견(차선책): https://youtu.be/{video_id}")
                     return f'<iframe width="100%" height="450" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'
             return None
         except Exception as e:

@@ -155,7 +155,7 @@ if menu == "시스템 개요":
                 content = f.read()
             
             with st.expander("내용 보기/숨기기", expanded=True):
-                st.markdown(content)
+                st.markdown(content, unsafe_allow_html=True)
                 
                 col_p1, col_p2 = st.columns(2)
                 with col_p1:
