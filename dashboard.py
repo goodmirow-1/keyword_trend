@@ -100,19 +100,55 @@ if menu == "시스템 개요":
                     content = wp_sys.generate_blog_content(selected_kw)
                     if content:
                         filepath = wp_sys.save_blog_post(selected_kw, content)
-                        st.success(f"생성 완료: {selected_kw}")
+                        st.success(f"✅ 생성 완료: {selected_kw}")
                         wp_sys._send_telegram_notification(f"✅ *블로그 로컬 저장 완료*\n\n*키워드*: {selected_kw}\n*파일*: `{os.path.basename(filepath)}`")
-                        # 워드프레스 설정이 있으면 자동 포스팅 시도
-                        if wp_sys.wp_url:
-                            title = wp_sys.extract_title_from_markdown(content)
-                            tags = wp_sys.extract_tags_from_markdown(content) or [selected_kw]
-                            wp_sys.post_to_wordpress(title, content, tags)
-                            st.balloons()
-                            st.success("워드프레스 포스팅 성공!")
+                        
+                        # 세션 상태에 저장하여 다이얼로그 표시
                         st.session_state.selected_preview = os.path.basename(filepath)
+                        st.session_state.show_wp_dialog = True
+                        st.session_state.dialog_content = content
+                        st.session_state.dialog_keyword = selected_kw
+                        st.session_state.dialog_filepath = filepath
+                        st.rerun()
                 else:
                     st.warning("현재 사용 가능한 새로운 트렌드가 없습니다.")
         st.markdown('</div>', unsafe_allow_html=True)
+    
+    # 워드프레스 포스팅 다이얼로그
+    @st.dialog("🌐 워드프레스 포스팅")
+    def wordpress_post_dialog():
+        st.write(f"**키워드**: {st.session_state.dialog_keyword}")
+        st.write(f"**파일**: {os.path.basename(st.session_state.dialog_filepath)}")
+        st.markdown("---")
+        st.info("💡 로컬에 저장이 완료되었습니다. 워드프레스에 바로 게시하시겠습니까?")
+        
+        col_yes, col_no = st.columns(2)
+        with col_yes:
+            if st.button("✅ 예, 게시합니다", use_container_width=True):
+                if wp_sys.wp_url:
+                    with st.spinner("워드프레스에 포스팅 중..."):
+                        title = wp_sys.extract_title_from_markdown(st.session_state.dialog_content)
+                        tags = wp_sys.extract_tags_from_markdown(st.session_state.dialog_content) or [st.session_state.dialog_keyword]
+                        success = wp_sys.post_to_wordpress(title, st.session_state.dialog_content, tags)
+                        if success:
+                            st.balloons()
+                            st.success("워드프레스 포스팅 성공!")
+                            time.sleep(1)
+                else:
+                    st.error("워드프레스 설정이 없습니다.")
+                
+                # 다이얼로그 닫기
+                st.session_state.show_wp_dialog = False
+                st.rerun()
+        
+        with col_no:
+            if st.button("❌ 아니오, 나중에", use_container_width=True):
+                st.session_state.show_wp_dialog = False
+                st.rerun()
+    
+    # 다이얼로그 표시
+    if st.session_state.get('show_wp_dialog', False):
+        wordpress_post_dialog()
 
     # 1. 최신 키워드 현황
     with col2:
