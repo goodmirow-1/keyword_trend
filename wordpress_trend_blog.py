@@ -143,43 +143,157 @@ class WordPressTrendBlogSystem(TrendBlogSystem):
         return tags
     
     def markdown_to_html(self, markdown_content):
-        """Markdown을 HTML로 변환 (간단한 변환)"""
-        # Frontmatter 제거
-        if markdown_content.strip().startswith('---'):
-            parts = markdown_content.split('---', 2)
-            if len(parts) >= 3:
-                markdown_content = parts[2].strip()
+        """Markdown을 HTML로 변환 (완전한 변환)"""
+        html = markdown_content.strip()
         
-        # 간단한 Markdown -> HTML 변환
-        html = markdown_content
+        # 0. 전체를 감싸는 코드 블록 제거 (LLM이 자주 이렇게 줌)
+        # 예: ```markdown ... ```
+        # 주의: 내부의 코드 블록은 건드리지 않도록 조심해야 함.
+        # 단순히 앞뒤의 ```markdown과 ```만 제거
+        if html.startswith('```'):
+            lines = html.split('\n')
+            # 첫 줄이 ```로 시작하고
+            if lines[0].strip().startswith('```'):
+                # 마지막 줄이 ```로 끝나면
+                if lines[-1].strip() == '```':
+                    # 첫 줄과 마지막 줄 제거
+                    html = '\n'.join(lines[1:-1]).strip()
         
-        # 이미지 변환
+        # 1. Frontmatter 제거 (YAML frontmatter) - 강화된 버전
+        # --- 로 시작하고 --- 또는 -- 로 끝나는 모든 경우 처리
+        if html.startswith('---'):
+            # 정규식으로 frontmatter 전체 제거 (--- ... --- 또는 --- ... --)
+            html = re.sub(r'^---\s*\n.*?\n(---|--)(\s*\n|$)', '', html, flags=re.DOTALL | re.MULTILINE)
+        
+        # 2. 코드 블록 안의 frontmatter 제거 (혹시 남아있을 경우)
+        html = re.sub(r'```(?:markdown|yaml)\s*\n?---.*?---\s*\n?```', '', html, flags=re.DOTALL)
+        
+        # 3. 남아있는 독립적인 frontmatter 블록 제거 (혹시 모를 경우 대비)
+        html = re.sub(r'^---\s*\ntitle:.*?\n(---|--)(\s*\n|$)', '', html, flags=re.DOTALL | re.MULTILINE)
+        
+        # 3. 코드 블록 변환 (``` 또는 ~~~)
+        def convert_code_block(match):
+            lang = match.group(1) or ''
+            code = match.group(2)
+            # HTML 이스케이프
+            code = code.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            if lang:
+                return f'<pre><code class="language-{lang}">{code}</code></pre>'
+            return f'<pre><code>{code}</code></pre>'
+        
+        html = re.sub(r'```(\w+)?\n(.*?)```', convert_code_block, html, flags=re.DOTALL)
+        html = re.sub(r'~~~(\w+)?\n(.*?)~~~', convert_code_block, html, flags=re.DOTALL)
+        
+        # 4. 마크다운 테이블 변환
+        def convert_table(table_text):
+            lines = [line.strip() for line in table_text.strip().split('\n') if line.strip()]
+            if len(lines) < 2:
+                return table_text
+            
+            # 헤더와 구분선 확인
+            header_line = lines[0]
+            separator_line = lines[1] if len(lines) > 1 else ''
+            
+            # 구분선이 아니면 테이블이 아님
+            if not re.match(r'^\|?[\s\-:|]+\|?$', separator_line):
+                return table_text
+            
+            # 테이블 HTML 생성
+            table_html = '<table border="1" style="border-collapse: collapse; width: 100%;">\n'
+            
+            # 헤더 처리
+            headers = [cell.strip() for cell in header_line.split('|') if cell.strip()]
+            table_html += '<thead>\n<tr>\n'
+            for header in headers:
+                table_html += f'<th style="padding: 8px; background-color: #f2f2f2;">{header}</th>\n'
+            table_html += '</tr>\n</thead>\n'
+            
+            # 본문 처리
+            if len(lines) > 2:
+                table_html += '<tbody>\n'
+                for line in lines[2:]:
+                    cells = [cell.strip() for cell in line.split('|') if cell.strip()]
+                    table_html += '<tr>\n'
+                    for cell in cells:
+                        table_html += f'<td style="padding: 8px;">{cell}</td>\n'
+                    table_html += '</tr>\n'
+                table_html += '</tbody>\n'
+            
+            table_html += '</table>'
+            return table_html
+        
+        # 테이블 패턴 찾기 (| 로 시작하는 연속된 라인)
+        table_pattern = r'(\|.+\|\n)+(\|[\s\-:|]+\|\n)(\|.+\|\n)+'
+        html = re.sub(table_pattern, lambda m: convert_table(m.group(0)), html, flags=re.MULTILINE)
+        
+        # 5. 이미지 변환
         html = re.sub(r'!\[([^\]]*)\]\(([^\)]*)\)', r'<img src="\2" alt="\1" style="max-width: 100%; height: auto;" />', html)
         
-        # 링크 변환
-        html = re.sub(r'\[([^\]]*)\]\(([^\)]*)\)', r'<a href="\2">\1</a>', html)
+        # 6. 링크 변환 (이미지 변환 후에 해야 함)
+        # file:// 링크는 제거하고 텍스트만 남김 (또는 검색 링크로 대체)
+        def convert_link(match):
+            text = match.group(1)
+            url = match.group(2)
+            if url.startswith('file://'):
+                # 워드프레스 검색 링크로 변환
+                if self.wp_url:
+                    return f'<a href="{self.wp_url}/?s={text}">{text}</a>'
+                return text
+            return f'<a href="{url}">{text}</a>'
+
+        html = re.sub(r'\[([^\]]*)\]\(([^\)]*)\)', convert_link, html)
         
-        # 헤더 변환
+        # 7. 헤더 변환
+        html = re.sub(r'^#### (.+)$', r'<h4>\1</h4>', html, flags=re.MULTILINE)
         html = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
         html = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
         html = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html, flags=re.MULTILINE)
         
-        # 리스트 변환 (간단하게)
+        # 8. 인라인 마크다운 변환 (순서 중요!)
+        # 볼드 이탤릭 (***text*** or ___text___)
+        html = re.sub(r'\*\*\*(.+?)\*\*\*', r'<strong><em>\1</em></strong>', html)
+        html = re.sub(r'___(.+?)___', r'<strong><em>\1</em></strong>', html)
+        
+        # 볼드 (**text** or __text__)
+        html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
+        html = re.sub(r'__(.+?)__', r'<strong>\1</strong>', html)
+        
+        # 이탤릭 (*text* or _text_) - 단어 경계 고려
+        html = re.sub(r'\*([^\*]+?)\*', r'<em>\1</em>', html)
+        html = re.sub(r'\b_([^_]+?)_\b', r'<em>\1</em>', html)
+        
+        # 인라인 코드 (`code`)
+        html = re.sub(r'`([^`]+?)`', r'<code>\1</code>', html)
+        
+        # 취소선 (~~text~~)
+        html = re.sub(r'~~(.+?)~~', r'<del>\1</del>', html)
+        
+        # 9. 리스트 변환
         html = re.sub(r'^\* (.+)$', r'<li>\1</li>', html, flags=re.MULTILINE)
         html = re.sub(r'^- (.+)$', r'<li>\1</li>', html, flags=re.MULTILINE)
+        html = re.sub(r'^\d+\. (.+)$', r'<li>\1</li>', html, flags=re.MULTILINE)
         
-        # 인용문 변환
+        # 10. 인용문 변환
         html = re.sub(r'^> (.+)$', r'<blockquote>\1</blockquote>', html, flags=re.MULTILINE)
         
-        # 단락 변환
+        # 11. 수평선 변환
+        html = re.sub(r'^---$', r'<hr />', html, flags=re.MULTILINE)
+        html = re.sub(r'^\*\*\*$', r'<hr />', html, flags=re.MULTILINE)
+        
+        # 12. 단락 변환
         paragraphs = html.split('\n\n')
         html_paragraphs = []
         for p in paragraphs:
             p = p.strip()
-            if p and not p.startswith('<'):
-                html_paragraphs.append(f'<p>{p}</p>')
-            else:
+            if not p:
+                continue
+            # 이미 HTML 태그로 시작하면 그대로
+            if p.startswith('<'):
                 html_paragraphs.append(p)
+            else:
+                # 줄바꿈을 <br>로 변환
+                p = p.replace('\n', '<br>\n')
+                html_paragraphs.append(f'<p>{p}</p>')
         
         html = '\n'.join(html_paragraphs)
         
