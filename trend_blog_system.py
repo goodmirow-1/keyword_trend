@@ -144,10 +144,12 @@ class TrendBlogSystem:
                     page = browser.new_page()
                     
                     # Google Trends 페이지 접속
-                    page.goto('https://trends.google.co.kr/trending?geo=KR&hours=24', timeout=30000)
+                    self._log("Google Trends 페이지 로딩 중...")
+                    page.goto('https://trends.google.co.kr/trending?geo=KR&hours=24', timeout=60000)
                     
                     # 페이지 로딩 대기
-                    page.wait_for_selector('tr[role="row"]', timeout=10000)
+                    self._log("트렌드 데이터 로딩 대기 중...")
+                    page.wait_for_selector('tr[role="row"]', timeout=15000)
                     
                     # JavaScript로 키워드 추출
                     keywords = page.evaluate('''() => {
@@ -173,45 +175,10 @@ class TrendBlogSystem:
                         
             except Exception as playwright_error:
                 import traceback
-                self._log(f"Playwright 트렌드 가져오기 실패: {playwright_error}")
-                self._log(f"상세 에러: {traceback.format_exc()}")
+                error_msg = str(playwright_error) if str(playwright_error) else "알 수 없는 오류"
+                self._log(f"Playwright 트렌드 가져오기 실패: {error_msg}")
+                self._log(f"상세 에러:\n{traceback.format_exc()}")
 
-            # 2. RSS 피드 시도 (Fallback)
-            try:
-                import requests
-                import xml.etree.ElementTree as ET
-                
-                rss_url = "https://trends.google.com/trends/trendingsearches/daily/rss?geo=KR"
-                response = requests.get(rss_url, headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                })
-                
-                if response.status_code == 200:
-                    root = ET.fromstring(response.content)
-                    for item in root.findall('.//item'):
-                        title = item.find('title')
-                        if title is not None:
-                            keywords.append(title.text)
-                    self._log(f"RSS 피드에서 {len(keywords)}개 키워드 획득")
-                else:
-                    self._log(f"RSS 요청 실패: Status Code {response.status_code}")
-            except Exception as rss_error:
-                self._log(f"RSS 트렌드 가져오기 실패: {rss_error}")
-
-            if keywords:
-                return keywords
-
-            # 3. Pytrends 시도 (Fallback)
-            try:
-                trending_searches = self.pytrends.trending_searches(pn='south_korea')
-                keywords = trending_searches[0].tolist()
-                self._log(f"Pytrends에서 {len(keywords)}개 키워드 획득")
-            except Exception as py_error:
-                self._log(f"Pytrends 실패: {py_error}")
-
-            if keywords:
-                return keywords
-            
             # 4. 모든 방법 실패 시 테스트용 더미 데이터 반환
             self._log("모든 트렌드 소스 가져오기 실패. 테스트용 더미 데이터를 사용합니다.")
             return ['생성형 AI', '파이썬 자동화', '주말 날씨', '최신 영화 순위', '맛집 추천']
@@ -426,25 +393,31 @@ class TrendBlogSystem:
             import re
             search_query = f"{keyword} 최신 뉴스"
             url = f"https://www.youtube.com/results?search_query={search_query}"
-            headers = {"User-Agent": "Mozilla/5.0"}
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
             response = requests.get(url, headers=headers, timeout=10)
             
             if response.status_code == 200:
                 # 비디오 목록에서 실제 검색 결과 비디오 ID만 추출하기 위해 "videoRenderer" 패턴 사용
                 # 이는 유튜브 검색 결과 페이지의 JSON 데이터 구조에서 비디오 항목을 식별하는 키워드입니다.
                 results = re.findall(r"\"videoRenderer\":\{\"videoId\":\"([^\"]+)\"", response.text)
+                
+                video_id = None
                 if results:
                     # 첫 번째 검색 결과 사용
                     video_id = results[0]
+                else:
+                    # 차선책: 기존의 단순 videoId 추출 (최신 데이터 구조 대응)
+                    video_ids = re.findall(r"\"videoId\":\"([^\"]+)\"", response.text)
+                    if video_ids:
+                        video_id = video_ids[0]
+                
+                # 유효성 검사: YouTube Video ID는 보통 11자리
+                if video_id and len(video_id) == 11:
                     self._log(f"유튜브 영상 발견: https://youtu.be/{video_id}")
                     return f'<iframe width="100%" height="450" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'
-                
-                # 차선책: 기존의 단순 videoId 추출 (최신 데이터 구조 대응)
-                video_ids = re.findall(r"\"videoId\":\"([^\"]+)\"", response.text)
-                if video_ids:
-                    video_id = video_ids[0]
-                    self._log(f"유튜브 영상 발견(차선책): https://youtu.be/{video_id}")
-                    return f'<iframe width="100%" height="450" src="https://www.youtube.com/embed/{video_id}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'
+                else:
+                    self._log(f"유효하지 않은 비디오 ID 발견: {video_id}")
+            
             return None
         except Exception as e:
             self._log(f"YouTube 영상 검색 실패: {e}")
@@ -618,6 +591,21 @@ class TrendBlogSystem:
         {fact_check_instruction}
         
         [Front-matter 작성 규칙]
+        **중요: 반드시 아래 형식을 정확히 따라야 합니다!**
+        
+        예시:
+        ---
+        title: '제목은 여기에'
+        categories: [정보, 분석]
+        tags: ['태그1', '태그2', '태그3']
+        description: 메타 설명은 여기에
+        ---
+        
+        **주의사항:**
+        - 시작과 끝 모두 정확히 `---` (하이픈 3개)를 사용해야 합니다
+        - `--` (하이픈 2개)는 절대 사용하지 마세요
+        - frontmatter를 ```markdown 코드 블록으로 감싸지 마세요
+        - frontmatter 다음에는 반드시 빈 줄을 하나 넣으세요
         - title: '{keyword}' + (카테고리별 특성에 맞는 매력적인 제목)
         - categories: 반드시 [정보, 분석, 후기] 등 적절한 것 선택 (트렌드 사용 금지)
         - tags: ['{keyword}', 관련태그1, 관련태그2]
@@ -1048,7 +1036,7 @@ class TrendBlogSystem:
         if related_posts:
             markdown += "## 🔗 함께 보면 좋은 글\n\n"
             for post in related_posts:
-                markdown += f"* [{post['title']}](file://{post['filename']})\n"
+                markdown += f"* **{post['title']}**\n"
             markdown += "\n"
             
         return markdown

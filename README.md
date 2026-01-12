@@ -225,9 +225,11 @@ python3 wordpress_trend_blog.py
 
 - ✅ **세분화된 카테고리 분류**: `SPORTS_MATCH`, `STOCK`, `SOCIAL_ISSUE` 등 14개 세부 분류
 - ✅ **이슈트래킹 카테고리 통합**: 모든 게시글은 "이슈트래킹" 카테고리로 자동 분류 및 생성
-- ✅ **Markdown → HTML 변환**: WordPress 호환 HTML로 자동 변환
+- ✅ **Markdown → HTML 변환**: WordPress 호환 HTML로 자동 변환 (Frontmatter 및 코드 블록 자동 제거)
 - ✅ **이미지 포함**: 본문 이미지 및 뉴스 이미지 자동 포함 (로컬 다운로드 후 삽입)
 - ✅ **로컬 백업**: WordPress 포스팅 여부와 관계없이 모든 글은 로컬에 Markdown으로 저장
+- ✅ **스마트 링크 변환**: 로컬 파일 링크(`file://`)를 WordPress 검색 링크로 자동 변환
+- ✅ **안정적인 YouTube 임베딩**: 개선된 로직으로 유효한 동영상 ID만 추출하여 플레이어 오류 방지
 
 ### 🗂️ 세부 카테고리 (14개)
 
