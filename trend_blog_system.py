@@ -1036,7 +1036,9 @@ class TrendBlogSystem:
         if related_posts:
             markdown += "## 🔗 함께 보면 좋은 글\n\n"
             for post in related_posts:
-                markdown += f"* **{post['title']}**\n"
+                # 클릭 가능한 링크로 생성
+                url = post.get('url', post.get('filename', '#'))
+                markdown += f"* [{post['title']}]({url})\n"
             markdown += "\n"
             
         return markdown

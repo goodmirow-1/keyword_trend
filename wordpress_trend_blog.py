@@ -24,6 +24,46 @@ class WordPressTrendBlogSystem(TrendBlogSystem):
             self._log(f"WordPress 설정 완료: {self.wp_url}")
         else:
             self._log("WordPress 설정이 없습니다. 로컬 파일로만 저장됩니다.")
+
+    def get_related_posts(self, current_keyword):
+        """
+        WordPress에서 최신 게시물 3개를 가져와 추천 글로 반환
+        """
+        if not self.wp_url or not self.wp_username or not self.wp_app_password:
+            self._log("WordPress 설정이 없어 로컬 관련글 로직을 사용합니다.")
+            return super().get_related_posts(current_keyword)
+
+        try:
+            self._log("WordPress에서 최신 게시물 가져오는 중...")
+            headers = self.get_wp_headers()
+            
+            # 최신 게시물 3개 가져오기
+            api_url = f"{self.wp_url}/wp-json/wp/v2/posts?per_page=3&status=publish"
+            response = requests.get(api_url, headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            posts = response.json()
+            related = []
+            
+            for post in posts:
+                # 렌더링된 제목에서 HTML 태그 제거 (있는 경우)
+                title = post.get('title', {}).get('rendered', '제목 없음')
+                title = re.sub(r'<[^>]+>', '', title)
+                link = post.get('link')
+                
+                if link:
+                    related.append({'title': title, 'url': link})
+            
+            if related:
+                self._log(f"WordPress에서 {len(related)}개의 추천 글을 가져왔습니다.")
+                return related
+            else:
+                self._log("WordPress에 게시된 글이 없습니다.")
+                return []
+                
+        except Exception as e:
+            self._log(f"WordPress 게시물 가져오기 실패: {e}")
+            return []
     
     def get_wp_headers(self):
         """WordPress API 인증 헤더 생성"""
@@ -97,16 +137,17 @@ class WordPressTrendBlogSystem(TrendBlogSystem):
     def extract_title_from_markdown(self, markdown_content):
         """Markdown에서 제목 추출"""
         # Frontmatter에서 title 추출
-        if markdown_content.strip().startswith('---'):
-            parts = markdown_content.split('---', 2)
-            if len(parts) >= 3:
-                frontmatter = parts[1]
-                for line in frontmatter.split('\n'):
-                    if line.strip().startswith('title:'):
-                        title = line.split('title:', 1)[1].strip()
-                        # 따옴표 제거
-                        title = title.strip('"').strip("'")
-                        return title
+        # Frontmatter에서 title 추출 (유연한 구분자 처리)
+        # 구분자: ---, –, —, 또는 그 조합 (3개 이상)
+        fm_match = re.match(r'^([-–—]{3,})\s*\n(.*?)\n\1', markdown_content.strip(), re.DOTALL)
+        if fm_match:
+            frontmatter = fm_match.group(2)
+            for line in frontmatter.split('\n'):
+                if line.strip().startswith('title:'):
+                    title = line.split('title:', 1)[1].strip()
+                    # 따옴표 제거
+                    title = title.strip('"').strip("'")
+                    return title
         
         # Frontmatter가 없으면 첫 번째 # 헤더 찾기
         lines = markdown_content.split('\n')
@@ -119,27 +160,27 @@ class WordPressTrendBlogSystem(TrendBlogSystem):
     def extract_tags_from_markdown(self, markdown_content):
         """Markdown frontmatter에서 태그 추출"""
         tags = []
-        if markdown_content.strip().startswith('---'):
-            parts = markdown_content.split('---', 2)
-            if len(parts) >= 3:
-                frontmatter = parts[1]
-                in_tags = False
-                for line in frontmatter.split('\n'):
-                    line = line.strip()
-                    if line.startswith('tags:'):
-                        # tags: [tag1, tag2] 형식
-                        tag_part = line.split('tags:', 1)[1].strip()
-                        if tag_part.startswith('[') and tag_part.endswith(']'):
-                            tag_part = tag_part[1:-1]
-                            tags = [t.strip().strip('"').strip("'") for t in tag_part.split(',')]
-                        else:
-                            in_tags = True
-                    elif in_tags:
-                        if line.startswith('-'):
-                            tag = line[1:].strip().strip('"').strip("'")
-                            tags.append(tag)
-                        elif line and not line.startswith(' '):
-                            in_tags = False
+        # Frontmatter 유연한 처리
+        fm_match = re.match(r'^([-–—]{3,})\s*\n(.*?)\n\1', markdown_content.strip(), re.DOTALL)
+        if fm_match:
+            frontmatter = fm_match.group(2)
+            in_tags = False
+            for line in frontmatter.split('\n'):
+                line = line.strip()
+                if line.startswith('tags:'):
+                    # tags: [tag1, tag2] 형식
+                    tag_part = line.split('tags:', 1)[1].strip()
+                    if tag_part.startswith('[') and tag_part.endswith(']'):
+                        tag_part = tag_part[1:-1]
+                        tags = [t.strip().strip('"').strip("'") for t in tag_part.split(',')]
+                    else:
+                        in_tags = True
+                elif in_tags:
+                    if line.startswith('-'):
+                        tag = line[1:].strip().strip('"').strip("'")
+                        tags.append(tag)
+                    elif line and not line.startswith(' '):
+                        in_tags = False
         return tags
     
     def markdown_to_html(self, markdown_content):
@@ -154,9 +195,9 @@ class WordPressTrendBlogSystem(TrendBlogSystem):
         youtube_pattern = r'<iframe.*?src="https://www\.youtube\.com/embed/([^"]+)".*?></iframe>'
         html = re.sub(youtube_pattern, r'https://www.youtube.com/watch?v=\1', html)
         
-        # 1. Frontmatter 제거 (YAML frontmatter)
-        if html.startswith('---'):
-            html = re.sub(r'^---\s*\n.*?\n(---|--)(\s*\n|$)', '', html, flags=re.DOTALL | re.MULTILINE)
+        # 1. Frontmatter 제거 (유연한 구분자 처리)
+        # 시작과 끝 구분자가 ---, –, — 등으로 다양할 수 있음
+        html = re.sub(r'^([-–—]{3,})\s*\n.*?\n\1(\s*\n|$)', '', html, flags=re.DOTALL)
         
         # 2. 코드 블록 처리 (``` 또는 ~~~)
         def convert_code_block(match):
