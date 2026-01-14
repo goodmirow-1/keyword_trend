@@ -61,6 +61,38 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Streamlit에서 안전하게 키워드 가져오기 (별도 프로세스)
+def get_trending_keywords_safe():
+    """
+    Streamlit 환경에서 Playwright를 안전하게 실행하기 위해 별도 프로세스 사용
+    Windows + Streamlit에서 asyncio subprocess NotImplementedError 회피
+    """
+    import subprocess
+    import json
+    
+    try:
+        result = subprocess.run(
+            ['python', 'fetch_keywords.py'],
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            timeout=120,  # 2분 타임아웃
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        
+        if result.returncode == 0:
+            keywords = json.loads(result.stdout.strip())
+            return keywords
+        else:
+            st.error(f"키워드 가져오기 실패: {result.stderr}")
+            return []
+    except subprocess.TimeoutExpired:
+        st.error("키워드 가져오기 시간 초과 (2분)")
+        return []
+    except Exception as e:
+        st.error(f"키워드 가져오기 오류: {e}")
+        return []
+
 # 시스템 인스턴스 초기화 (캐시)
 @st.cache_resource
 def get_systems():
@@ -93,7 +125,7 @@ if menu == "시스템 개요":
         if st.button("🚀 실행: 다음 트렌드 즉시 작성"):
             with st.spinner("다음 미사용 트렌드 찾는 중..."):
                 # run_blog_creation logic inside dashboard
-                all_keywords = trend_sys.get_trending_keywords()
+                all_keywords = get_trending_keywords_safe()
                 selected_kw = trend_sys.select_keyword(all_keywords)
                 
                 if selected_kw:
@@ -156,7 +188,7 @@ if menu == "시스템 개요":
         st.subheader("📈 실시간 트렌드")
         if st.button("키워드 새로고침"):
             with st.spinner("구글 트렌드 불러오는 중..."):
-                all_keywords = trend_sys.get_trending_keywords()
+                all_keywords = get_trending_keywords_safe()
                 used_keywords = trend_sys._load_used_keywords()
                 st.session_state.keywords = [kw for kw in all_keywords if kw not in used_keywords]
         
@@ -243,7 +275,7 @@ elif menu == "키워드 생성기":
     
     with tab1:
         if st.button("현재 트렌드 가져오기"):
-            all_keywords = trend_sys.get_trending_keywords()
+            all_keywords = get_trending_keywords_safe()
             used_keywords = trend_sys._load_used_keywords()
             st.session_state.keywords = [kw for kw in all_keywords if kw not in used_keywords]
             

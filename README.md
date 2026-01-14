@@ -115,7 +115,7 @@ python3 wordpress_trend_blog.py
 Streamlit을 사용하여 생성된 글을 관리하고 실시간 트렌드를 확인할 수 있습니다:
 
 ```bash
-streamlit run dashboard.py
+python -m streamlit run dashboard.py
 ```
 
 - **Dashboard**: 시스템 상태 및 최근 포스팅 현황 요약
@@ -153,8 +153,10 @@ cat blog_posts/20260107_165629_키워드.md
 ```
 keyword_trend/
 ├── trend_blog_system.py    # 메인 시스템 코드 (로컬 저장)
-├── wordpress_trend_blog.py # WordPress 자동 포스팅 (NEW!)
-├── requirements.txt         # Python 패키지 목록
+├── wordpress_trend_blog.py # WordPress 자동 포스팅
+├── dashboard.py            # Streamlit 관리 대시보드 (NEW!)
+├── fetch_keywords.py       # Streamlit-Playwright 호환성 헬퍼 (NEW!)
+├── requirements.txt        # Python 패키지 목록
 ├── .env.example            # 환경 변수 예제
 ├── .env                    # 환경 변수 설정 (gitignore)
 ├── .gitignore              # Git 제외 파일 목록
@@ -284,6 +286,40 @@ python3 -m playwright install chromium --force
 - 인터넷 연결 확인
 - 로그 파일에서 상세 오류 확인
 - 더미 데이터로 폴백되어 계속 작동
+
+### Streamlit Dashboard에서 키워드 가져오기 실패 (Windows)
+
+**증상**: `python trend_blog_system.py`는 정상 작동하지만 `streamlit run dashboard.py`에서 키워드 가져오기 실패
+
+**원인**: Windows + Streamlit 환경에서 Playwright의 asyncio subprocess가 `NotImplementedError` 발생
+
+**해결**: 이미 적용됨 - `fetch_keywords.py` 헬퍼 스크립트를 통해 별도 프로세스에서 Playwright 실행
+
+Dashboard는 자동으로 `get_trending_keywords_safe()` 함수를 사용하여 이 문제를 우회합니다.
+
+## 🏗️ 시스템 아키텍처
+
+### 핵심 컴포넌트
+
+1. **trend_blog_system.py**: 메인 블로그 생성 시스템
+   - Google Trends 키워드 추출 (Playwright)
+   - AI 콘텐츠 생성 (Gemini)
+   - 뉴스/이미지 수집
+   - Markdown 파일 생성
+
+2. **wordpress_trend_blog.py**: WordPress 자동 포스팅
+   - Markdown → HTML 변환
+   - WordPress REST API 연동
+   - 카테고리/태그 관리
+
+3. **dashboard.py**: Streamlit 관리 대시보드
+   - 실시간 트렌드 모니터링
+   - 포스트 관리 및 수동 포스팅
+   - 시스템 로그 확인
+
+4. **fetch_keywords.py**: Streamlit-Playwright 호환성 헬퍼
+   - Windows 환경에서 Streamlit과 Playwright 격리
+   - subprocess를 통한 안전한 키워드 추출
 
 ## 📝 라이선스
 
