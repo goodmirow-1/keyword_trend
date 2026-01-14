@@ -103,7 +103,7 @@ trend_sys, wp_sys = get_systems()
 # 사이드바
 st.sidebar.title("🔥 트렌드 블로그 관리")
 st.sidebar.markdown("---")
-menu = st.sidebar.radio("메뉴", ["시스템 개요", "키워드 생성기", "포스트 관리", "사용된 키워드", "시스템 로그"])
+menu = st.sidebar.radio("메뉴", ["시스템 개요", "키워드 생성기", "포스트 관리", "사용된 키워드", "시스템 설정", "시스템 로그"])
 
 st.sidebar.markdown("---")
 st.sidebar.info(f"**페르소나**: {trend_sys.persona.capitalize()}")
@@ -401,6 +401,7 @@ elif menu == "사용된 키워드":
         st.markdown("---")
         st.table(df)
 
+    # The following 'else' block was misplaced and is now correctly associated with the log file check for "시스템 로그"
 elif menu == "시스템 로그":
     st.title("🪵 시스템 로그")
     st.write("`system_log.txt` 실시간 로그 확인")
@@ -419,6 +420,81 @@ elif menu == "시스템 로그":
             st.rerun()
     else:
         st.write("로그 파일을 찾을 수 없습니다.")
+
+elif menu == "시스템 설정":
+    st.title("⚙️ 시스템 설정")
+    st.write("블로그 자동 발행 시간 등 시스템 설정을 관리합니다.")
+    
+    # 설정 로드 (TrendBlogSystem 인스턴스의 config 활용)
+    if hasattr(trend_sys, 'config'):
+        config = trend_sys.config
+    else:
+        # 캐시된 인스턴스가 예전 버전일 경우 대비
+        config = trend_sys._load_config()
+        trend_sys.config = config
+    
+    publication_times = config.get('publication_times', ["08:00", "12:00", "16:00", "20:00"])
+    
+    st.subheader("⏰ 발행 시간 설정")
+    st.info("설정된 시간에 맞춰 구글 트렌드를 분석하고 블로그를 자동으로 생성/발행합니다.")
+    
+    # 시간 관리를 위한 세션 상태 초기화
+    if 'temp_times' not in st.session_state:
+        st.session_state.temp_times = sorted(list(set(publication_times)))
+    
+    # 시간 추가 UI
+    col_add_1, col_add_2 = st.columns([3, 1])
+    with col_add_1:
+        new_time = st.time_input("새로운 발행 시간 선택:", value=datetime.strptime("09:00", "%H:%M").time())
+    with col_add_2:
+        st.write("") # 간격 맞춤
+        st.write("")
+        if st.button("➕ 시간 추가"):
+            time_str = new_time.strftime("%H:%M")
+            if time_str not in st.session_state.temp_times:
+                st.session_state.temp_times.append(time_str)
+                st.session_state.temp_times.sort()
+                st.success(f"{time_str} 추가됨")
+            else:
+                st.warning("이미 설정된 시간입니다.")
+    
+    st.markdown("---")
+    
+    # 현재 설정된 시간 목록 표시 및 삭제
+    if not st.session_state.temp_times:
+        st.warning("최소 한 개 이상의 발행 시간이 필요합니다.")
+    else:
+        for idx, t in enumerate(st.session_state.temp_times):
+            col_t1, col_t2 = st.columns([4, 1])
+            with col_t1:
+                st.markdown(f"#### 🕒 {t}")
+            with col_t2:
+                if st.button("🗑️ 삭제", key=f"del_{t}_{idx}"):
+                    st.session_state.temp_times.remove(t)
+                    st.rerun()
+                    
+    st.markdown("---")
+    
+    # 저장 버튼
+    col_save_1, col_save_2 = st.columns([1, 1])
+    with col_save_1:
+        if st.button("💾 설정 저장"):
+            if not st.session_state.temp_times:
+                st.error("최소 한 개 이상의 발행 시간 정보를 입력해야 합니다.")
+            else:
+                config['publication_times'] = st.session_state.temp_times
+                trend_sys._save_config(config)
+                st.success("설정이 저장되었습니다!")
+                st.balloons()
+                time.sleep(1)
+                st.rerun()
+    with col_save_2:
+        if st.button("🔄 초기화"):
+            if 'temp_times' in st.session_state:
+                del st.session_state.temp_times
+            st.rerun()
+
+    st.warning("⚠️ 참고: 발행 시간 설정을 변경한 후에는 백그라운드에서 실행 중인 자동 발행 프로세스를 재시작해야 변경 사항이 적용됩니다.")
 
 st.sidebar.markdown("---")
 st.sidebar.caption(f"마지막 업데이트: {datetime.now().strftime('%H:%M:%S')}")

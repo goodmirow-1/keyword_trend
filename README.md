@@ -12,7 +12,7 @@ Google Trends에서 실시간 인기 키워드를 추출하여 AI가 자동으�
 - 📝 **Markdown 출력**: Jekyll, Hugo 등 정적 사이트 생성기 호환 마크다운 파일 생성
 - 📊 **YAML Frontmatter**: 제목, 날짜, 카테고리, 태그 등 메타데이터 자동 생성
 - 📱 **반응형 디자인**: 모바일/태블릿/데스크톱 완벽 대응
-- ⏰ **자동 스케줄링**: 매일 정해진 시간에 자동 실행 (08:00, 12:00, 16:00, 20:00)
+- ⏰ **커스텀 스케줄링**: 대시보드에서 여러 개의 발행 시간을 자유롭게 설정 가능 (NEW!)
 - 🔄 **중복 방지**: 이미 사용한 키워드는 자동으로 제외
 - 🏷️ **카테고리 세분화 분류**: 키워드 특성에 따른 14개 세부 카테고리 자동 분류 및 맞춤형 프롬프트 적용
 - 🌐 **WordPress 자동 포스팅**: WordPress REST API를 통한 자동 게시 및 "이슈트래킹" 카테고리 통합
@@ -121,6 +121,7 @@ python -m streamlit run dashboard.py
 - **Dashboard**: 시스템 상태 및 최근 포스팅 현황 요약
 - **Keyword Generator**: 실시간 트렌드 키워드 조회 및 즉시 블로그 생성
 - **Post Management**: 생성된 로컬 마크다운 파일 관리 및 수동 워드프레스 포스팅
+- **System Settings**: 발행 시간 추가/삭제 및 관리 (NEW!)
 - **System Logs**: 시스템 로그 실시간 확인
 
 ### 🔔 실시간 알림 (NEW!)
@@ -165,6 +166,7 @@ keyword_trend/
 │   ├── images/            # 다운로드된 이미지
 │   └── *.md               # 생성된 Markdown 파일
 ├── used_keywords.json      # 사용된 키워드 기록 (gitignore)
+├── system_config.json      # 시스템 설정 파일 (발행 시간 등) (NEW!)
 └── system_log.txt          # 시스템 로그 (gitignore)
 ```
 
@@ -179,17 +181,9 @@ keyword_trend/
 
 ## 🔧 설정 커스터마이징
 
-### 스케줄 변경
+대시보드의 **"시스템 설정"** 메뉴에서 발행 시간을 자유롭게 추가하거나 삭제할 수 있습니다. 설정된 값은 `system_config.json`에 저장되며, 시스템 재시작 시 적용됩니다.
 
-`trend_blog_system.py` 파일의 `main()` 함수에서 스케줄 수정:
-
-```python
-# 매일 08:00, 12:00, 16:00, 20:00 실행
-schedule.every().day.at("08:00").do(system.run_blog_creation)
-schedule.every().day.at("12:00").do(system.run_blog_creation)
-schedule.every().day.at("16:00").do(system.run_blog_creation)
-schedule.every().day.at("20:00").do(system.run_blog_creation)
-```
+직접 코드를 수정하려면 `trend_blog_system.py` 파일의 `main()` 함수 부분을 참고하세요.
 
 ### AI 모델 변경
 
@@ -233,11 +227,13 @@ python3 wordpress_trend_blog.py
 
 - ✅ **세분화된 카테고리 분류**: `SPORTS_MATCH`, `STOCK`, `SOCIAL_ISSUE` 등 14개 세부 분류
 - ✅ **이슈트래킹 카테고리 통합**: 모든 게시글은 "이슈트래킹" 카테고리로 자동 분류 및 생성
-- ✅ **Markdown → HTML 변환**: WordPress 호환 HTML로 자동 변환 (Frontmatter 및 코드 블록 자동 제거)
+- ✅ **Markdown → HTML 변환 고도화**: 불필요한 마크다운 기호를 완벽 제거하고 표준 HTML 구조(<p>, <ul>)로 정교하게 변환
+- ✅ **카드형 뉴스 피드 디자인**: 뉴스 항목을 썸네일과 요약이 포함된 현대적인 카드 스타일로 리디자인 (NEW!)
+- ✅ **고급 테마 스타일링**: 폰트 레이아웃, 이미지 그림자 효과 등 프리미엄 블로그 디자인 자동 적용 (NEW!)
 - ✅ **이미지 포함**: 본문 이미지 및 뉴스 이미지 자동 포함 (로컬 다운로드 후 삽입)
 - ✅ **로컬 백업**: WordPress 포스팅 여부와 관계없이 모든 글은 로컬에 Markdown으로 저장
-- ✅ **스마트 링크 변환**: 로컬 파일 링크(`file://`)를 WordPress 검색 링크로 자동 변환
-- ✅ **안정적인 YouTube 임베딩**: 개선된 로직으로 유효한 동영상 ID만 추출하여 플레이어 오류 방지
+- ✅ **스마트 링크 변환**: 로컬 파일 링크(`file://`)를 강조 텍스트로 자동 변환하여 가독성 향상
+- ✅ **안정적인 YouTube 임베딩**: WordPress oEmbed 방식을 채택하여 플레이어 오류(153) 없이 안정적인 영상 재생 지원 (NEW!)
 
 ### 🗂️ 세부 카테고리 (14개)
 
